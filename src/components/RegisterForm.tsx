@@ -287,7 +287,7 @@ export default function RegisterForm() {
         <div className="space-y-2">
           <label className="font-medium">銘柄名（必須）</label>
           <input
-            className="w-full border p-2 rounded"
+            className="w-full border border-gray-300 bg-white text-black placeholder:text-gray-400 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/30"
             placeholder="例：山崎12年"
             value={name}
             onChange={(e) => setName(e.target.value)}
