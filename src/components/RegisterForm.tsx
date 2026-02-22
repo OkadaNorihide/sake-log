@@ -412,7 +412,7 @@ export default function RegisterForm() {
         <div className="space-y-2">
           <label className="font-medium">ひとことメモ（任意）</label>
           <textarea
-            className="w-full p-2 border border-gray-300 rounded bg-white text-black dark:bg-gray-800 dark:text-white"
+            className="w-full border border-gray-300 bg-white text-black placeholder:text-gray-400 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/30"
             placeholder="感想や印象を一言で"
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
