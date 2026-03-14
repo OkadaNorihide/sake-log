@@ -12,21 +12,8 @@ type Review = {
   scenes: string[];
   memo: string;
   images?: string[];
-  createdAt: string;
+  created_at: string;
 };
-
-const STORAGE_KEY = "sake-log:alcohols";
-
-function loadReviews(): Review[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as Review[]) : [];
-  } catch {
-    return [];
-  }
-}
 
 function round1(n: number) {
   return Math.round(n * 10) / 10;
@@ -78,11 +65,29 @@ export default function BottleDetailPage() {
   const decodedName = rawName ? decodeURIComponent(rawName) : "";
 
   const [all, setAll] = useState<Review[]>([]);
-  useEffect(() => setAll(loadReviews()), []);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchReviews = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/reviews", { cache: "no-store" });
+        const json = (await res.json()) as { items?: Review[]; error?: string };
+        if (!res.ok) throw new Error(json.error || "failed");
+        setAll(Array.isArray(json.items) ? json.items : []);
+      } catch {
+        setAll([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReviews();
+  }, []);
 
   const reviews = useMemo(() => {
     const filtered = all.filter((r) => (r.name ?? "").trim() === decodedName);
-    filtered.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)); // 最新順
+    filtered.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     return filtered;
   }, [all, decodedName]);
 
@@ -97,7 +102,6 @@ export default function BottleDetailPage() {
     );
     const topTastes = countTop(allTastes, 3);
 
-    // 最新順レビューから画像を最大3枚（重複除外）
     const collected = uniqKeepOrder(
       reviews.flatMap((r) => (Array.isArray(r.images) ? r.images : []))
     ).slice(0, 3);
@@ -108,7 +112,7 @@ export default function BottleDetailPage() {
       avgRating: round1(avg),
       reviewCount: reviews.length,
       topTastes,
-      latestAt: reviews[0]?.createdAt ?? "",
+      latestAt: reviews[0]?.created_at ?? "",
       heroUrls,
     };
   }, [reviews]);
@@ -126,17 +130,13 @@ export default function BottleDetailPage() {
 
   return (
     <div className="relative min-h-screen text-white">
-      {/* 背景画像 */}
       <div
         className="absolute inset-0 bg-cover bg-center"
         style={{ backgroundImage: "url('/bottle-bg.jpg')" }}
       />
-      {/* 濃さ調整：/70 を /75 や /80 にするともっと濃くなる */}
       <div className="absolute inset-0 bg-black/75" />
 
-      {/* コンテンツ */}
       <div className="relative z-10 p-6 max-w-5xl mx-auto space-y-6">
-        {/* ヘッダー */}
         <header className="flex items-start justify-between gap-4">
           <div className="space-y-2">
             <h1 className="text-3xl md:text-4xl font-bold tracking-wide drop-shadow-lg">
@@ -156,11 +156,11 @@ export default function BottleDetailPage() {
           </Link>
         </header>
 
-        {/* サマリー（ガラス） */}
         <section className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5 md:p-6 space-y-5 shadow-xl">
-          {summary ? (
+          {loading ? (
+            <div className="text-sm text-white/80">読み込み中...</div>
+          ) : summary ? (
             <>
-              {/* hero 3枚 */}
               {summary.heroUrls.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {summary.heroUrls.map((url, idx) => (
@@ -182,7 +182,6 @@ export default function BottleDetailPage() {
                 </div>
               )}
 
-              {/* 統合評価 */}
               <div className="flex items-start justify-between gap-4">
                 <div className="text-white/70 text-sm">統合評価</div>
                 <div className="text-right">
@@ -193,7 +192,6 @@ export default function BottleDetailPage() {
                 </div>
               </div>
 
-              {/* Top tastes */}
               <div className="flex flex-wrap gap-2">
                 {summary.topTastes.length === 0 ? (
                   <span className="text-sm text-white/60">味わい未登録</span>
@@ -225,11 +223,14 @@ export default function BottleDetailPage() {
           )}
         </section>
 
-        {/* レビュー一覧 */}
         <section className="space-y-4">
           <h2 className="text-lg font-semibold drop-shadow">レビュー一覧</h2>
 
-          {reviews.length === 0 ? (
+          {loading ? (
+            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 text-white/80">
+              読み込み中...
+            </div>
+          ) : reviews.length === 0 ? (
             <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 text-white/80">
               まだレビューがありません。
               <div className="mt-3">
@@ -246,7 +247,9 @@ export default function BottleDetailPage() {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="text-sm text-white/70">
-                    {r.createdAt ? new Date(r.createdAt).toLocaleString("ja-JP") : "—"}
+                    {r.created_at
+                      ? new Date(r.created_at).toLocaleString("ja-JP")
+                      : "—"}
                   </div>
                   <div className="text-sm">
                     {"★".repeat(r.rating)}
@@ -277,7 +280,6 @@ export default function BottleDetailPage() {
                   </div>
                 )}
 
-                {/* サムネ（クリックでレビュー詳細へ） */}
                 {Array.isArray(r.images) && r.images.length > 0 && (
                   <div className="flex gap-2 flex-wrap">
                     {r.images.slice(0, 3).map((src, idx) => (
@@ -311,7 +313,6 @@ export default function BottleDetailPage() {
           )}
         </section>
 
-        {/* フッター導線 */}
         <div className="flex gap-3">
           <Link
             href="/register"
