@@ -11,7 +11,7 @@ type Review = {
   scenes: string[];
   memo: string;
   images?: string[];
-  createdAt: string;
+  created_at: string;
 };
 
 type BottleSummary = {
@@ -22,20 +22,6 @@ type BottleSummary = {
   latestAt: string;
   thumbUrl?: string;
 };
-
-const STORAGE_KEY = "sake-log:alcohols";
-
-function loadReviews(): Review[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed as Review[];
-  } catch {
-    return [];
-  }
-}
 
 function round1(n: number) {
   return Math.round(n * 10) / 10;
@@ -83,15 +69,15 @@ function buildSummaries(reviews: Review[]): BottleSummary[] {
 
     const latest =
       rs
-        .map((r) => r.createdAt || "")
+        .map((r) => r.created_at || "")
         .filter(Boolean)
         .sort()
         .at(-1) || "";
 
     const latestReview =
       rs
-        .filter((r) => r.createdAt)
-        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0] ?? rs[0];
+        .filter((r) => r.created_at)
+        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0] ?? rs[0];
 
     const rawThumb = latestReview?.images?.[0];
     const thumbUrl = rawThumb ? toThumbUrl(rawThumb) : undefined;
@@ -115,9 +101,24 @@ export default function HomePage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [q, setQ] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("reviewCount");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setReviews(loadReviews());
+    const fetchReviews = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/reviews", { cache: "no-store" });
+        const json = (await res.json()) as { items?: Review[]; error?: string };
+        if (!res.ok) throw new Error(json.error || "failed");
+        setReviews(Array.isArray(json.items) ? json.items : []);
+      } catch {
+        setReviews([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReviews();
   }, []);
 
   const summaries = useMemo(() => buildSummaries(reviews), [reviews]);
@@ -142,14 +143,12 @@ export default function HomePage() {
 
   return (
     <div className="relative min-h-screen text-white">
-      {/* 背景画像 */}
       <div
         className="absolute inset-0 bg-cover bg-center opacity-45"
         style={{ backgroundImage: "url('/bar-bg.jpg')" }}
       />
       <div className="absolute inset-0 bg-black/40" />
 
-      {/* コンテンツ */}
       <div className="relative z-10 p-6 max-w-5xl mx-auto space-y-8">
         <header className="flex items-center justify-between gap-3">
           <h1 className="text-3xl font-bold tracking-wide drop-shadow-lg">
@@ -164,7 +163,6 @@ export default function HomePage() {
           </Link>
         </header>
 
-        {/* 検索 & ソート */}
         <section className="bg-white/10 backdrop-blur-md rounded-2xl p-6 flex flex-col md:flex-row gap-4">
           <input
             className="flex-1 bg-white/20 border border-white/20 text-white placeholder-gray-300 p-3 rounded-lg outline-none focus:ring-2 focus:ring-white/40"
@@ -184,8 +182,11 @@ export default function HomePage() {
           </select>
         </section>
 
-        {/* 一覧 */}
-        {sorted.length === 0 ? (
+        {loading ? (
+          <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 text-sm">
+            読み込み中...
+          </div>
+        ) : sorted.length === 0 ? (
           <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 text-sm">
             まだ登録がありません。
           </div>

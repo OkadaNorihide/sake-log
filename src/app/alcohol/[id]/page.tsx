@@ -12,7 +12,7 @@ type Review = {
   scenes: string[];
   memo: string;
   images?: string[];
-  createdAt: string;
+  created_at: string;
 };
 
 type CommentItem = {
@@ -23,22 +23,6 @@ type CommentItem = {
   body: string;
   created_at: string;
 };
-
-const STORAGE_KEY = "sake-log:alcohols";
-
-function loadReviews(): Review[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as Review[]) : [];
-  } catch {
-    return [];
-  }
-}
-function saveReviews(items: Review[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-}
 
 /* -----------------------------
    Cloudinary変換（HEIC対応）
@@ -56,22 +40,33 @@ export default function ReviewDetailPage() {
   const params = useParams<{ id: string }>();
   const id = typeof params?.id === "string" ? params.id : "";
 
-  const [items, setItems] = useState<Review[]>([]);
-  useEffect(() => setItems(loadReviews()), []);
+  const [review, setReview] = useState<Review | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const review = useMemo(() => items.find((x) => x.id === id), [items, id]);
+  useEffect(() => {
+    const fetchReview = async () => {
+      if (!id) {
+        setLoading(false);
+        return;
+      }
 
-  const onDelete = () => {
-    if (!review) return;
-    const ok = confirm(`「${review.name}」のこのレビューを削除します。よろしいですか？`);
-    if (!ok) return;
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/reviews/${encodeURIComponent(id)}`, {
+          cache: "no-store",
+        });
+        const json = (await res.json()) as { item?: Review; error?: string };
+        if (!res.ok) throw new Error(json.error || "failed");
+        setReview(json.item ?? null);
+      } catch {
+        setReview(null);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    const next = items.filter((x) => x.id !== id);
-    saveReviews(next);
-
-    router.push("/");
-    router.refresh?.();
-  };
+    fetchReview();
+  }, [id]);
 
   if (!id) {
     return (
@@ -80,6 +75,22 @@ export default function ReviewDetailPage() {
         <Link href="/" className="underline text-sm">
           一覧へ戻る
         </Link>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="p-6 max-w-2xl mx-auto space-y-4">
+        <header className="flex items-center justify-between">
+          <h1 className="text-xl font-bold">レビュー詳細</h1>
+          <Link href="/" className="text-sm underline text-gray-600">
+            一覧へ戻る
+          </Link>
+        </header>
+        <div className="rounded-lg border p-6 text-sm text-gray-700">
+          読み込み中...
+        </div>
       </div>
     );
   }
@@ -114,13 +125,15 @@ export default function ReviewDetailPage() {
           <div>
             <div className="text-2xl font-bold">{review.name}</div>
             <div className="text-xs text-gray-500">
-              登録日時：{new Date(review.createdAt).toLocaleString("ja-JP")}
+              登録日時：{new Date(review.created_at).toLocaleString("ja-JP")}
             </div>
           </div>
 
           <div className="text-lg text-gray-700">
             {"★".repeat(review.rating)}
-            <span className="text-gray-300">{"★".repeat(Math.max(0, 5 - review.rating))}</span>
+            <span className="text-gray-300">
+              {"★".repeat(Math.max(0, 5 - review.rating))}
+            </span>
           </div>
         </div>
 
@@ -139,7 +152,6 @@ export default function ReviewDetailPage() {
           </div>
         )}
 
-        {/* 写真 */}
         {Array.isArray(review.images) && review.images.length > 0 && (
           <div className="space-y-2">
             <div className="text-sm font-medium">写真</div>
@@ -165,15 +177,20 @@ export default function ReviewDetailPage() {
       </div>
 
       <div className="flex gap-3">
-        <Link href={`/bottle/${encodeURIComponent(review.name)}`} className="w-1/2 border rounded px-4 py-2 text-center bg-white/80">
+        <Link
+          href={`/bottle/${encodeURIComponent(review.name)}`}
+          className="w-1/2 border rounded px-4 py-2 text-center bg-white/80"
+        >
           銘柄ページへ
         </Link>
-        <button onClick={onDelete} className="w-1/2 bg-red-600 text-white rounded px-4 py-2">
+        <button
+          onClick={() => alert("削除機能はあとでSupabase対応します")}
+          className="w-1/2 bg-red-600 text-white rounded px-4 py-2"
+        >
           削除する
         </button>
       </div>
 
-      {/* ★コメント欄（Supabase共有） */}
       <CommentsSection reviewId={review.id} />
     </div>
   );
@@ -202,6 +219,7 @@ function CommentsSection({ reviewId }: { reviewId: string }) {
   const [replyBody, setReplyBody] = useState("");
 
   const parents = useMemo(() => items.filter((c) => c.parent_id === null), [items]);
+
   const childrenByParent = useMemo(() => {
     const m = new Map<string, CommentItem[]>();
     for (const c of items) {
@@ -223,7 +241,6 @@ function CommentsSection({ reviewId }: { reviewId: string }) {
       if (!res.ok) throw new Error(json.error || "failed");
       setItems(Array.isArray(json.items) ? json.items : []);
     } catch {
-      // 失敗しても画面は維持
       setItems([]);
     } finally {
       setLoading(false);
@@ -232,13 +249,14 @@ function CommentsSection({ reviewId }: { reviewId: string }) {
 
   useEffect(() => {
     fetchComments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reviewId]);
 
   const postComment = async (payload: { parentId?: string | null; body: string }) => {
     const res = await fetch("/api/comments", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         reviewId,
         parentId: payload.parentId ?? null,
@@ -246,6 +264,7 @@ function CommentsSection({ reviewId }: { reviewId: string }) {
         body: payload.body,
       }),
     });
+
     const json = (await res.json()) as { item?: CommentItem; error?: string };
     if (!res.ok) throw new Error(json.error || "failed");
     return json.item;
@@ -287,7 +306,6 @@ function CommentsSection({ reviewId }: { reviewId: string }) {
         </button>
       </div>
 
-      {/* 投稿フォーム */}
       <div className="space-y-2">
         <div className="flex flex-col sm:flex-row gap-2">
           <input
@@ -315,7 +333,6 @@ function CommentsSection({ reviewId }: { reviewId: string }) {
         </button>
       </div>
 
-      {/* 一覧 */}
       {loading ? (
         <div className="text-sm text-gray-600">読み込み中…</div>
       ) : parents.length === 0 ? (
@@ -345,7 +362,6 @@ function CommentsSection({ reviewId }: { reviewId: string }) {
 
                 <p className="text-sm text-gray-800 whitespace-pre-wrap">{p.body}</p>
 
-                {/* 返信フォーム */}
                 {replyTo === p.id && (
                   <div className="space-y-2 border-t pt-3">
                     <textarea
@@ -375,7 +391,6 @@ function CommentsSection({ reviewId }: { reviewId: string }) {
                   </div>
                 )}
 
-                {/* 返信一覧 */}
                 {kids.length > 0 && (
                   <div className="space-y-3 border-t pt-3">
                     {kids.map((c) => (
