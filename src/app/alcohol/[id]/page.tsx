@@ -85,7 +85,7 @@ export default function ReviewDetailPage() {
         className="absolute inset-0 bg-cover"
         style={{
     backgroundImage: "url('/review-bg.jpg')",
-    backgroundPosition: "center 100%",
+    backgroundPosition: "center 75%",
   }}
       />
       <div className="absolute inset-0 bg-black/70" />
