@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 
 type Review = {
   id: string;
@@ -13,6 +13,7 @@ type Review = {
   memo: string;
   images?: string[];
   created_at: string;
+  likes_count?: number;
 };
 
 type CommentItem = {
@@ -25,7 +26,7 @@ type CommentItem = {
 };
 
 /* -----------------------------
-   Cloudinary変換（HEIC対応）
+   Cloudinary変換
 ------------------------------ */
 function cloudinaryTransform(url: string, transform: string) {
   if (!url?.includes("res.cloudinary.com")) return url;
@@ -36,7 +37,6 @@ function toPreviewUrl(url: string) {
 }
 
 export default function ReviewDetailPage() {
-  const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = typeof params?.id === "string" ? params.id : "";
 
@@ -79,125 +79,174 @@ export default function ReviewDetailPage() {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="p-6 max-w-2xl mx-auto space-y-4">
-        <header className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">レビュー詳細</h1>
-          <Link href="/" className="text-sm underline text-gray-600">
-            一覧へ戻る
-          </Link>
-        </header>
-        <div className="rounded-lg border p-6 text-sm text-gray-700">
-          読み込み中...
-        </div>
-      </div>
-    );
-  }
-
-  if (!review) {
-    return (
-      <div className="p-6 max-w-2xl mx-auto space-y-4">
-        <header className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">レビュー詳細</h1>
-          <Link href="/" className="text-sm underline text-gray-600">
-            一覧へ戻る
-          </Link>
-        </header>
-        <div className="rounded-lg border p-6 text-sm text-gray-700">
-          このレビューが見つかりませんでした。
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="p-6 max-w-2xl mx-auto space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">レビュー詳細</h1>
-        <Link href="/" className="text-sm underline text-gray-600">
-          一覧へ戻る
-        </Link>
-      </header>
+    <div className="relative min-h-screen text-white">
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: "url('/review-bg.jpg')" }}
+      />
+      <div className="absolute inset-0 bg-black/70" />
 
-      <div className="rounded-lg border p-6 space-y-4 bg-white/80">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-2xl font-bold">{review.name}</div>
-            <div className="text-xs text-gray-500">
-              登録日時：{new Date(review.created_at).toLocaleString("ja-JP")}
-            </div>
+      <div className="relative z-10 p-6 max-w-2xl mx-auto space-y-6">
+        <header className="flex items-center justify-between">
+          <h1 className="text-xl font-bold">レビュー詳細</h1>
+          <Link href="/" className="text-sm underline text-white/80">
+            一覧へ戻る
+          </Link>
+        </header>
+
+        {loading ? (
+          <div className="rounded-lg border border-white/20 bg-white/10 backdrop-blur-md p-6 text-sm text-white/80">
+            読み込み中...
           </div>
-
-          <div className="text-lg text-gray-700">
-            {"★".repeat(review.rating)}
-            <span className="text-gray-300">
-              {"★".repeat(Math.max(0, 5 - review.rating))}
-            </span>
+        ) : !review ? (
+          <div className="rounded-lg border border-white/20 bg-white/10 backdrop-blur-md p-6 text-sm text-white/80">
+            このレビューが見つかりませんでした。
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md p-6 space-y-4 shadow-xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-2xl font-bold">{review.name}</div>
+                  <div className="text-xs text-white/70">
+                    登録日時：{new Date(review.created_at).toLocaleString("ja-JP")}
+                  </div>
+                </div>
 
-        {(review.tastes.length > 0 || review.scenes.length > 0) && (
-          <div className="flex flex-wrap gap-2">
-            {review.tastes.map((t) => (
-              <span key={t} className="text-xs border rounded-full px-2 py-1 bg-white/70">
-                #{t}
-              </span>
-            ))}
-            {review.scenes.map((s) => (
-              <span key={s} className="text-xs border rounded-full px-2 py-1 bg-white/70">
-                #{s}
-              </span>
-            ))}
-          </div>
-        )}
+                <div className="text-lg text-white">
+                  {"★".repeat(review.rating)}
+                  <span className="text-white/30">
+                    {"★".repeat(Math.max(0, 5 - review.rating))}
+                  </span>
+                </div>
+              </div>
 
-        {Array.isArray(review.images) && review.images.length > 0 && (
-          <div className="space-y-2">
-            <div className="text-sm font-medium">写真</div>
-            <div className="grid grid-cols-3 gap-2">
-              {review.images.slice(0, 3).map((src, idx) => (
-                <img
-                  key={idx}
-                  src={toPreviewUrl(src)}
-                  alt={`image-${idx}`}
-                  className="w-full aspect-square object-cover rounded border bg-gray-50"
+              {(review.tastes.length > 0 || review.scenes.length > 0) && (
+                <div className="flex flex-wrap gap-2">
+                  {review.tastes.map((t) => (
+                    <span
+                      key={t}
+                      className="text-xs rounded-full px-2 py-1 border border-white/20 bg-white/10"
+                    >
+                      #{t}
+                    </span>
+                  ))}
+                  {review.scenes.map((s) => (
+                    <span
+                      key={s}
+                      className="text-xs rounded-full px-2 py-1 border border-white/20 bg-white/10"
+                    >
+                      #{s}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {Array.isArray(review.images) && review.images.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">写真</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {review.images.slice(0, 3).map((src, idx) => (
+                      <img
+                        key={idx}
+                        src={toPreviewUrl(src)}
+                        alt={`image-${idx}`}
+                        className="w-full aspect-square object-cover rounded border border-white/20 bg-white/10"
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <div className="text-sm font-medium">メモ</div>
+                <p className="text-sm text-white/85 whitespace-pre-wrap">
+                  {review.memo?.trim() ? review.memo : "（なし）"}
+                </p>
+              </div>
+
+              <div className="pt-2">
+                <LikeButton
+                  reviewId={review.id}
+                  initialCount={review.likes_count ?? 0}
                 />
-              ))}
+              </div>
             </div>
-          </div>
+
+            <div className="flex gap-3">
+              <Link
+                href={`/bottle/${encodeURIComponent(review.name)}`}
+                className="w-1/2 rounded-lg px-4 py-2 text-center bg-white text-black"
+              >
+                銘柄ページへ
+              </Link>
+              <button
+                onClick={() => alert("削除機能はあとでSupabase対応します")}
+                className="w-1/2 bg-red-600 text-white rounded-lg px-4 py-2"
+              >
+                削除する
+              </button>
+            </div>
+
+            <CommentsSection reviewId={review.id} />
+          </>
         )}
-
-        <div className="space-y-1">
-          <div className="text-sm font-medium">メモ</div>
-          <p className="text-sm text-gray-700 whitespace-pre-wrap">
-            {review.memo?.trim() ? review.memo : "（なし）"}
-          </p>
-        </div>
       </div>
-
-      <div className="flex gap-3">
-        <Link
-          href={`/bottle/${encodeURIComponent(review.name)}`}
-          className="w-1/2 border rounded px-4 py-2 text-center bg-white/80"
-        >
-          銘柄ページへ
-        </Link>
-        <button
-          onClick={() => alert("削除機能はあとでSupabase対応します")}
-          className="w-1/2 bg-red-600 text-white rounded px-4 py-2"
-        >
-          削除する
-        </button>
-      </div>
-
-      <CommentsSection reviewId={review.id} />
     </div>
   );
 }
 
 /* -----------------------------
-   Comments UI (anonymous + reply)
+   Like button
+------------------------------ */
+
+function LikeButton({
+  reviewId,
+  initialCount,
+}: {
+  reviewId: string;
+  initialCount: number;
+}) {
+  const [count, setCount] = useState(initialCount);
+  const [loading, setLoading] = useState(false);
+
+  const onLike = async () => {
+    if (loading) return;
+    setLoading(true);
+
+    try {
+      const res = await fetch(`/api/reviews/${encodeURIComponent(reviewId)}/like`, {
+        method: "POST",
+      });
+      const json = (await res.json()) as {
+        likes_count?: number;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(json.error || "failed");
+      setCount(json.likes_count ?? count + 1);
+    } catch {
+      alert("いいねに失敗しました。時間をおいて再試行してください。");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={onLike}
+      disabled={loading}
+      className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm hover:bg-white/20 disabled:opacity-50"
+    >
+      <span>♡</span>
+      <span>いいね</span>
+      <span className="text-white/70">{count}</span>
+    </button>
+  );
+}
+
+/* -----------------------------
+   Comments UI
 ------------------------------ */
 
 function formatJa(dt: string) {
@@ -298,10 +347,10 @@ function CommentsSection({ reviewId }: { reviewId: string }) {
   };
 
   return (
-    <div className="rounded-lg border p-6 space-y-4 bg-white/80">
+    <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md p-6 space-y-4 shadow-xl">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">コメント</h2>
-        <button onClick={fetchComments} className="text-sm underline text-gray-600">
+        <button onClick={fetchComments} className="text-sm underline text-white/80">
           更新
         </button>
       </div>
@@ -309,7 +358,7 @@ function CommentsSection({ reviewId }: { reviewId: string }) {
       <div className="space-y-2">
         <div className="flex flex-col sm:flex-row gap-2">
           <input
-            className="border rounded px-3 py-2 sm:w-56 text-black"
+            className="border border-white/20 bg-white text-black rounded px-3 py-2 sm:w-56"
             placeholder="名前（任意）"
             value={authorName}
             onChange={(e) => setAuthorName(e.target.value)}
@@ -318,7 +367,7 @@ function CommentsSection({ reviewId }: { reviewId: string }) {
         </div>
 
         <textarea
-          className="w-full border rounded px-3 py-2 min-h-[88px] text-black"
+          className="w-full border border-white/20 bg-white text-black rounded px-3 py-2 min-h-[88px]"
           placeholder="コメントを書く"
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -334,17 +383,17 @@ function CommentsSection({ reviewId }: { reviewId: string }) {
       </div>
 
       {loading ? (
-        <div className="text-sm text-gray-600">読み込み中…</div>
+        <div className="text-sm text-white/70">読み込み中…</div>
       ) : parents.length === 0 ? (
-        <div className="text-sm text-gray-600">まだコメントがありません。</div>
+        <div className="text-sm text-white/70">まだコメントがありません。</div>
       ) : (
         <div className="space-y-4">
           {parents.map((p) => {
             const kids = childrenByParent.get(p.id) ?? [];
             return (
-              <div key={p.id} className="border rounded-lg p-4 space-y-3 bg-white">
+              <div key={p.id} className="border border-white/20 rounded-lg p-4 space-y-3 bg-white/95 text-black">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-gray-800">
+                  <div className="text-sm font-medium">
                     {p.author_name || "匿名"}
                     <span className="ml-2 text-xs text-gray-500">{formatJa(p.created_at)}</span>
                   </div>
@@ -360,7 +409,7 @@ function CommentsSection({ reviewId }: { reviewId: string }) {
                   </button>
                 </div>
 
-                <p className="text-sm text-gray-800 whitespace-pre-wrap">{p.body}</p>
+                <p className="text-sm whitespace-pre-wrap">{p.body}</p>
 
                 {replyTo === p.id && (
                   <div className="space-y-2 border-t pt-3">
@@ -399,7 +448,7 @@ function CommentsSection({ reviewId }: { reviewId: string }) {
                           <span className="font-medium">{c.author_name || "匿名"}</span>
                           <span className="ml-2">{formatJa(c.created_at)}</span>
                         </div>
-                        <p className="text-sm text-gray-800 whitespace-pre-wrap mt-1">{c.body}</p>
+                        <p className="text-sm whitespace-pre-wrap mt-1">{c.body}</p>
                       </div>
                     ))}
                   </div>

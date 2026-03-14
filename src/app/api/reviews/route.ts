@@ -10,13 +10,14 @@ type ReviewRow = {
   memo: string;
   images: string[];
   created_at: string;
+  likes_count: number;
 };
 
 export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
       .from("reviews")
-      .select("id, name, rating, tastes, scenes, memo, images, created_at")
+      .select("id, name, rating, tastes, scenes, memo, images, created_at, likes_count")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
         memo,
         images,
       })
-      .select("id, name, rating, tastes, scenes, memo, images, created_at")
+      .select("id, name, rating, tastes, scenes, memo, images, created_at, likes_count")
       .single();
 
     if (error) {

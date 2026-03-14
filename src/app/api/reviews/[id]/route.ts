@@ -10,6 +10,7 @@ type ReviewRow = {
   memo: string;
   images: string[];
   created_at: string;
+  likes_count: number;
 };
 
 export async function GET(
@@ -25,7 +26,7 @@ export async function GET(
 
     const { data, error } = await supabaseAdmin
       .from("reviews")
-      .select("id, name, rating, tastes, scenes, memo, images, created_at")
+      .select("id, name, rating, tastes, scenes, memo, images, created_at, likes_count")
       .eq("id", id)
       .single();
 
