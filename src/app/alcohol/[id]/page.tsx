@@ -185,7 +185,27 @@ export default function ReviewDetailPage() {
                 銘柄ページへ
               </Link>
               <button
-                onClick={() => alert("削除機能はあとでSupabase対応します")}
+                onClick={async () => {
+                  const ok = confirm("このレビューを削除しますか？");
+                  if (!ok) return;
+
+                  try {
+                    const res = await fetch(`/api/reviews/${review.id}`, {
+                      method: "DELETE",
+                    });
+
+                    const json = await res.json();
+
+                    if (!res.ok) {
+                      throw new Error(json.error || "delete failed");
+                    }
+
+                    alert("削除しました");
+                    window.location.href = "/";
+                  } catch (e) {
+                    alert("削除に失敗しました");
+                  }
+                }}
                 className="w-1/2 bg-red-600 text-white rounded-lg px-4 py-2"
               >
                 削除する
