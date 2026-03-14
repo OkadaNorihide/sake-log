@@ -82,8 +82,11 @@ export default function ReviewDetailPage() {
   return (
     <div className="relative min-h-screen text-white">
       <div
-        className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: "url('/review-bg.jpg')" }}
+        className="absolute inset-0 bg-cover"
+        style={{
+    backgroundImage: "url('/review-bg.jpg')",
+    backgroundPosition: "center 30%",
+  }}
       />
       <div className="absolute inset-0 bg-black/70" />
 
