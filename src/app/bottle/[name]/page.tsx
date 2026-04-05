@@ -4,6 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 
+type BottleInfo = {
+  summary: string;
+  amazon_url: string;
+  rakuten_url: string;
+};
+
 type Review = {
   id: string;
   name: string;
@@ -67,6 +73,12 @@ export default function BottleDetailPage() {
   const [all, setAll] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [info, setInfo] = useState<BottleInfo>({ summary: "", amazon_url: "", rakuten_url: "" });
+  const [infoLoading, setInfoLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<BottleInfo>({ summary: "", amazon_url: "", rakuten_url: "" });
+  const [saving, setSaving] = useState(false);
+
   useEffect(() => {
     const fetchReviews = async () => {
       setLoading(true);
@@ -84,6 +96,50 @@ export default function BottleDetailPage() {
 
     fetchReviews();
   }, []);
+
+  useEffect(() => {
+    if (!decodedName) return;
+    const fetchInfo = async () => {
+      setInfoLoading(true);
+      try {
+        const res = await fetch(`/api/bottle-info/${encodeURIComponent(decodedName)}`, { cache: "no-store" });
+        const json = await res.json();
+        if (json.item) {
+          setInfo({ summary: json.item.summary ?? "", amazon_url: json.item.amazon_url ?? "", rakuten_url: json.item.rakuten_url ?? "" });
+        }
+      } catch {
+        // テーブルがなければ無視
+      } finally {
+        setInfoLoading(false);
+      }
+    };
+    fetchInfo();
+  }, [decodedName]);
+
+  const startEdit = () => {
+    setDraft({ ...info });
+    setEditing(true);
+  };
+
+  const saveInfo = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/bottle-info/${encodeURIComponent(decodedName)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      const json = await res.json();
+      if (json.item) {
+        setInfo({ summary: json.item.summary ?? "", amazon_url: json.item.amazon_url ?? "", rakuten_url: json.item.rakuten_url ?? "" });
+      }
+      setEditing(false);
+    } catch {
+      alert("保存に失敗しました");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const reviews = useMemo(() => {
     const filtered = all.filter((r) => (r.name ?? "").trim() === decodedName);
@@ -223,6 +279,109 @@ export default function BottleDetailPage() {
           )}
         </section>
 
+        {/* 銘柄情報（Amazon/楽天リンク・サマリ） */}
+        {!infoLoading && (
+          <section className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5 md:p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold">銘柄情報</h2>
+              {!editing && (
+                <button
+                  onClick={startEdit}
+                  className="text-xs px-3 py-1 rounded-lg border border-white/30 hover:bg-white/10 transition"
+                >
+                  編集
+                </button>
+              )}
+            </div>
+
+            {editing ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-white/60 mb-1 block">紹介サマリ</label>
+                  <textarea
+                    className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-sm text-white placeholder-white/40 outline-none focus:ring-2 focus:ring-white/30 resize-none"
+                    rows={4}
+                    placeholder="この銘柄の特徴・説明など"
+                    value={draft.summary}
+                    onChange={(e) => setDraft((d) => ({ ...d, summary: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-white/60 mb-1 block">Amazon リンク</label>
+                  <input
+                    type="url"
+                    className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-sm text-white placeholder-white/40 outline-none focus:ring-2 focus:ring-white/30"
+                    placeholder="https://www.amazon.co.jp/..."
+                    value={draft.amazon_url}
+                    onChange={(e) => setDraft((d) => ({ ...d, amazon_url: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-white/60 mb-1 block">楽天市場 リンク</label>
+                  <input
+                    type="url"
+                    className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-sm text-white placeholder-white/40 outline-none focus:ring-2 focus:ring-white/30"
+                    placeholder="https://item.rakuten.co.jp/..."
+                    value={draft.rakuten_url}
+                    onChange={(e) => setDraft((d) => ({ ...d, rakuten_url: e.target.value }))}
+                  />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={saveInfo}
+                    disabled={saving}
+                    className="px-4 py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-gray-100 transition disabled:opacity-50"
+                  >
+                    {saving ? "保存中..." : "保存"}
+                  </button>
+                  <button
+                    onClick={() => setEditing(false)}
+                    disabled={saving}
+                    className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-sm hover:bg-white/20 transition"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {info.summary ? (
+                  <p className="text-sm text-white/85 whitespace-pre-wrap leading-relaxed">{info.summary}</p>
+                ) : (
+                  <p className="text-sm text-white/40">紹介文が未登録です</p>
+                )}
+                {(info.amazon_url || info.rakuten_url) && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {info.amazon_url && (
+                      <a
+                        href={info.amazon_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF9900] text-black rounded-lg text-sm font-semibold hover:bg-[#e68a00] transition"
+                      >
+                        Amazon で見る
+                      </a>
+                    )}
+                    {info.rakuten_url && (
+                      <a
+                        href={info.rakuten_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#BF0000] text-white rounded-lg text-sm font-semibold hover:bg-[#a00000] transition"
+                      >
+                        楽天市場で見る
+                      </a>
+                    )}
+                  </div>
+                )}
+                {!info.summary && !info.amazon_url && !info.rakuten_url && (
+                  <p className="text-xs text-white/40">「編集」から情報を追加できます</p>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
         <section className="space-y-4">
           <h2 className="text-lg font-semibold drop-shadow">レビュー一覧</h2>
 
@@ -315,7 +474,7 @@ export default function BottleDetailPage() {
 
         <div className="flex gap-3">
           <Link
-            href="/register"
+            href={`/register?name=${encodeURIComponent(decodedName)}`}
             className="w-1/2 bg-white text-black rounded-lg px-4 py-3 text-center font-medium shadow hover:bg-gray-100 transition"
           >
             追加で登録

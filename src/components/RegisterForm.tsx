@@ -1,16 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const TASTES = ["フルーティー", "甘い", "スモーキー", "軽い", "コク", "スパイシー"];
 const SCENES = ["家飲み", "バー", "居酒屋", "贈答", "特別な日"];
 
 type Step = "form" | "confirm" | "complete";
-
-/* -----------------------------
-   Cloudinary変換（HEIC対応）
------------------------------- */
 
 function cloudinaryTransform(url: string, transform: string) {
   if (!url.includes("res.cloudinary.com")) return url;
@@ -21,19 +17,14 @@ function toThumbUrl(url: string) {
   return cloudinaryTransform(url, "f_auto,q_auto,c_fill,w_200,h_200");
 }
 
-function toPreviewUrl(url: string) {
-  return cloudinaryTransform(url, "f_auto,q_auto,c_limit,w_800");
-}
-
 async function getCloudinarySignature() {
   const res = await fetch("/api/cloudinary/sign", { cache: "no-store" });
-  if (!res.ok) throw new Error("failed to get signature");
+  if (!res.ok) throw new Error("署名の取得に失敗しました");
   return res.json();
 }
 
 async function uploadToCloudinary(file: File): Promise<string> {
-  const { cloudName, apiKey, timestamp, signature, folder } =
-    await getCloudinarySignature();
+  const { cloudName, apiKey, timestamp, signature, folder } = await getCloudinarySignature();
 
   const form = new FormData();
   form.append("file", file);
@@ -42,160 +33,132 @@ async function uploadToCloudinary(file: File): Promise<string> {
   form.append("signature", signature);
   if (folder) form.append("folder", folder);
 
-  const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
-
-  const res = await fetch(uploadUrl, {
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
     method: "POST",
     body: form,
   });
 
   const json = await res.json();
-
-  if (!res.ok) {
-    throw new Error(json?.error?.message || "upload failed");
-  }
-
-  return json.secure_url;
+  if (!res.ok) throw new Error(json?.error?.message || "アップロード失敗");
+  return json.secure_url as string;
 }
 
-/* -----------------------------
-   Component
------------------------------- */
+/* ----------------------------------------
+   Props
+---------------------------------------- */
+type Props = {
+  defaultName?: string;
+};
 
-export default function RegisterForm() {
+export default function RegisterForm({ defaultName = "" }: Props) {
   const [step, setStep] = useState<Step>("form");
 
-  const [name, setName] = useState("");
-  const [rating, setRating] = useState<number>(0);
+  const [name, setName] = useState(defaultName);
+  const [rating, setRating] = useState(0);
   const [tastes, setTastes] = useState<string[]>([]);
   const [scenes, setScenes] = useState<string[]>([]);
   const [memo, setMemo] = useState("");
 
   const [images, setImages] = useState<string[]>([]);
+  const [localPreviews, setLocalPreviews] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
-  const [createdId, setCreatedId] = useState<string>("");
+  const [bottleNames, setBottleNames] = useState<string[]>([]);
+  const [createdId, setCreatedId] = useState("");
+
+  // 既存銘柄名を取得（予測変換用）
+  useEffect(() => {
+    fetch("/api/bottles", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setBottleNames(Array.isArray(j.names) ? j.names : []))
+      .catch(() => {});
+  }, []);
 
   const canGoConfirm = useMemo(
-    () => name.trim().length > 0 && rating > 0,
-    [name, rating]
+    () => name.trim().length > 0 && rating > 0 && !isUploading,
+    [name, rating, isUploading]
   );
 
-  const toggle = (
-    value: string,
-    list: string[],
-    setList: (v: string[]) => void
-  ) => {
+  const toggle = (value: string, list: string[], setList: (v: string[]) => void) => {
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
   };
 
   const handlePhotoChange = async (files: FileList | null) => {
-    if (!files) return;
+    if (!files || files.length === 0) return;
+    setUploadError("");
 
-    const arr = Array.from(files).slice(0, 3);
+    // 現在の枚数 + 新規選択が3枚を超えないようにスライス
+    const remaining = 3 - images.length;
+    if (remaining <= 0) return;
+    const arr = Array.from(files).slice(0, remaining);
 
-    if (arr.length === 0) {
-      setImages([]);
-      return;
-    }
-
+    // ローカルプレビューを先に表示
+    const previews = arr.map((f) => URL.createObjectURL(f));
+    setLocalPreviews((prev) => [...prev, ...previews]);
     setIsUploading(true);
 
     try {
       const urls: string[] = [];
-
       for (const f of arr) {
         const url = await uploadToCloudinary(f);
         urls.push(url);
       }
-
-      setImages(urls);
-    } catch (e: any) {
-      alert(`画像アップロード失敗: ${e?.message || "unknown error"}`);
-      setImages([]);
+      setImages((prev) => [...prev, ...urls]);
+      // ローカルプレビューをCloudinary URLで置き換え
+      setLocalPreviews([]);
+      // ファイル入力をリセット（同じファイルを再選択できるように）
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "unknown error";
+      setUploadError(`アップロード失敗: ${msg}`);
+      setLocalPreviews([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } finally {
       setIsUploading(false);
     }
   };
 
-  const removeImageAt = (idx: number) => {
+  const removeImage = (idx: number) => {
     setImages((prev) => prev.filter((_, i) => i !== idx));
   };
-
-  /* -----------------------------
-     Supabase保存
-  ------------------------------ */
 
   const onSubmit = async () => {
     try {
       const res = await fetch("/api/reviews", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          rating,
-          tastes,
-          scenes,
-          memo: memo.trim(),
-          images
-        })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), rating, tastes, scenes, memo: memo.trim(), images }),
       });
-
       const json = await res.json();
-
-      if (!res.ok) {
-        throw new Error(json.error || "failed");
-      }
-
+      if (!res.ok) throw new Error(json.error || "failed");
       setCreatedId(json.item.id);
       setStep("complete");
-    } catch (e: any) {
-      console.error(e);
-      alert(`レビュー登録失敗: ${e?.message || "unknown error"}`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "unknown error";
+      alert(`登録失敗: ${msg}`);
     }
   };
 
-  /* -----------------------------
-     完了画面
-  ------------------------------ */
-
+  /* ---- 完了画面 ---- */
   if (step === "complete") {
     return (
       <div className="space-y-6">
-        <div className="rounded-lg border p-6 space-y-2">
+        <div className="rounded-lg border border-white/20 p-6 space-y-2">
           <h2 className="text-xl font-bold">登録完了！</h2>
-          <p className="text-sm text-gray-600">レビューが保存されました。</p>
+          <p className="text-sm text-white/70">レビューが保存されました。</p>
         </div>
-
         <div className="flex gap-3">
-          <Link
-            href={`/alcohol/${createdId}`}
-            className="w-1/2 bg-black text-white rounded px-4 py-2 text-center"
-          >
+          <Link href={`/alcohol/${createdId}`} className="w-1/2 bg-white text-black rounded-lg px-4 py-2 text-center font-medium">
             レビュー詳細を見る
           </Link>
-
-          <Link
-            href="/"
-            className="w-1/2 border rounded px-4 py-2 text-center"
-          >
+          <Link href="/" className="w-1/2 border border-white/20 rounded-lg px-4 py-2 text-center">
             一覧へ
           </Link>
         </div>
-
         <button
-          className="w-full border rounded px-4 py-2"
-          onClick={() => {
-            setName("");
-            setRating(0);
-            setTastes([]);
-            setScenes([]);
-            setMemo("");
-            setImages([]);
-            setStep("form");
-          }}
+          className="w-full border border-white/20 rounded-lg px-4 py-2 hover:bg-white/10 transition"
+          onClick={() => { setName(defaultName); setRating(0); setTastes([]); setScenes([]); setMemo(""); setImages([]); setCreatedId(""); setStep("form"); }}
         >
           続けて登録
         </button>
@@ -203,49 +166,32 @@ export default function RegisterForm() {
     );
   }
 
-  /* -----------------------------
-     確認画面
-  ------------------------------ */
-
+  /* ---- 確認画面 ---- */
   if (step === "confirm") {
     return (
       <div className="space-y-6">
-        <div className="rounded-lg border p-6 space-y-4">
+        <div className="rounded-lg border border-white/20 p-6 space-y-4">
           <h2 className="text-xl font-bold">登録内容確認</h2>
-
           <div className="space-y-2 text-sm">
             <Row label="銘柄名" value={name} />
             <Row label="評価" value={"★".repeat(rating)} />
-            <Row label="味" value={tastes.join(", ")} />
-            <Row label="シーン" value={scenes.join(", ")} />
+            <Row label="味" value={tastes.join(", ") || "なし"} />
+            <Row label="シーン" value={scenes.join(", ") || "なし"} />
             <Row label="メモ" value={memo || "なし"} />
           </div>
-
           {images.length > 0 && (
             <div className="flex gap-2 flex-wrap">
               {images.map((src, idx) => (
-                <img
-                  key={idx}
-                  src={toThumbUrl(src)}
-                  className="h-20 w-20 object-cover rounded border"
-                />
+                <img key={idx} src={toThumbUrl(src)} className="h-20 w-20 object-cover rounded-lg border border-white/20" alt={`preview-${idx}`} />
               ))}
             </div>
           )}
         </div>
-
         <div className="flex gap-3">
-          <button
-            className="w-1/2 border rounded px-4 py-2"
-            onClick={() => setStep("form")}
-          >
+          <button className="w-1/2 border border-white/20 rounded-lg px-4 py-2 hover:bg-white/10 transition" onClick={() => setStep("form")}>
             修正
           </button>
-
-          <button
-            className="w-1/2 bg-black text-white rounded px-4 py-2"
-            onClick={onSubmit}
-          >
+          <button className="w-1/2 bg-white text-black rounded-lg px-4 py-2 font-medium hover:bg-gray-100 transition" onClick={onSubmit}>
             登録する
           </button>
         </div>
@@ -253,47 +199,57 @@ export default function RegisterForm() {
     );
   }
 
-  /* -----------------------------
-     入力画面
-  ------------------------------ */
+  /* ---- 入力画面 ---- */
+  const allPreviews = [...images.map((u) => toThumbUrl(u)), ...localPreviews];
 
   return (
     <div className="space-y-6">
 
+      {/* 銘柄名 */}
       <div className="space-y-2">
-        <label>銘柄名</label>
+        <label className="text-sm font-medium">銘柄名</label>
         <input
-          className="w-full border p-2 rounded text-black"
+          list="bottle-names-list"
+          className="w-full bg-white/10 border border-white/20 text-white placeholder-white/40 p-3 rounded-lg outline-none focus:ring-2 focus:ring-white/30"
+          placeholder="例：獺祭、久保田、..."
           value={name}
           onChange={(e) => setName(e.target.value)}
+          readOnly={!!defaultName}
         />
+        {bottleNames.length > 0 && (
+          <datalist id="bottle-names-list">
+            {bottleNames.map((n) => (
+              <option key={n} value={n} />
+            ))}
+          </datalist>
+        )}
+        {defaultName && (
+          <p className="text-xs text-white/50">銘柄ページから引き継がれています</p>
+        )}
       </div>
 
+      {/* 評価 */}
       <div className="space-y-2">
-        <label>評価</label>
-        <div className="flex gap-1 text-2xl">
-          {[1,2,3,4,5].map((i)=>(
-            <button
-              key={i}
-              onClick={()=>setRating(i)}
-              className={i <= rating ? "text-yellow-400":"text-gray-300"}
-            >
+        <label className="text-sm font-medium">評価</label>
+        <div className="flex gap-1 text-3xl">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <button key={i} type="button" onClick={() => setRating(i)} className={i <= rating ? "text-yellow-400" : "text-white/20"}>
               ★
             </button>
           ))}
         </div>
       </div>
 
+      {/* 味 */}
       <div className="space-y-2">
-        <label>味</label>
+        <label className="text-sm font-medium">味わい</label>
         <div className="flex flex-wrap gap-2">
-          {TASTES.map((t)=>(
+          {TASTES.map((t) => (
             <button
               key={t}
-              onClick={()=>toggle(t,tastes,setTastes)}
-              className={`px-2 py-1 border rounded ${
-                tastes.includes(t) ? "bg-black text-white":"bg-white text-black"
-              }`}
+              type="button"
+              onClick={() => toggle(t, tastes, setTastes)}
+              className={`px-3 py-1 border rounded-full text-sm transition ${tastes.includes(t) ? "bg-white text-black border-white" : "border-white/30 hover:bg-white/10"}`}
             >
               #{t}
             </button>
@@ -301,16 +257,16 @@ export default function RegisterForm() {
         </div>
       </div>
 
+      {/* シーン */}
       <div className="space-y-2">
-        <label>シーン</label>
+        <label className="text-sm font-medium">シーン</label>
         <div className="flex flex-wrap gap-2">
-          {SCENES.map((s)=>(
+          {SCENES.map((s) => (
             <button
               key={s}
-              onClick={()=>toggle(s,scenes,setScenes)}
-              className={`px-2 py-1 border rounded ${
-                scenes.includes(s) ? "bg-black text-white":"bg-white text-black"
-              }`}
+              type="button"
+              onClick={() => toggle(s, scenes, setScenes)}
+              className={`px-3 py-1 border rounded-full text-sm transition ${scenes.includes(s) ? "bg-white text-black border-white" : "border-white/30 hover:bg-white/10"}`}
             >
               #{s}
             </button>
@@ -318,56 +274,92 @@ export default function RegisterForm() {
         </div>
       </div>
 
-      <div className="space-y-2">
-        <label>写真</label>
-        <input
-          type="file"
-          multiple
-          onChange={(e)=>handlePhotoChange(e.target.files)}
-        />
+      {/* 写真 */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium">写真（最大3枚）</label>
 
-        {isUploading && <p className="text-xs">アップロード中…</p>}
-
-        {images.length > 0 && (
+        {/* プレビュー */}
+        {allPreviews.length > 0 && (
           <div className="flex gap-2 flex-wrap">
-            {images.map((src,idx)=>(
-              <button key={idx} onClick={()=>removeImageAt(idx)}>
-                <img
-                  src={toThumbUrl(src)}
-                  className="h-20 w-20 object-cover rounded border"
-                />
-              </button>
+            {allPreviews.map((src, idx) => (
+              <div key={idx} className="relative">
+                <img src={src} className="h-24 w-24 object-cover rounded-xl border border-white/20" alt={`photo-${idx}`} />
+                {idx < images.length && (
+                  <button
+                    type="button"
+                    onClick={() => removeImage(idx)}
+                    className="absolute -top-1 -right-1 bg-black/70 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center hover:bg-red-600 transition"
+                  >
+                    ×
+                  </button>
+                )}
+                {idx >= images.length && (
+                  <div className="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center">
+                    <span className="text-xs text-white/70">処理中</span>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}
+
+        {/* アップロードボタン（labelでinputを包む — programmatic clickより確実） */}
+        {allPreviews.length < 3 && (
+          <label
+            className={`inline-flex items-center gap-2 px-4 py-2 border border-white/30 rounded-lg text-sm cursor-pointer hover:bg-white/10 transition ${isUploading ? "opacity-50 pointer-events-none" : ""}`}
+          >
+            {isUploading ? (
+              <>
+                <span className="animate-spin inline-block">⟳</span> アップロード中...
+              </>
+            ) : (
+              <>
+                <span>＋</span> 写真を追加
+              </>
+            )}
+            <input
+              type="file"
+              multiple
+              accept="image/*,image/heic,image/heif"
+              className="hidden"
+              disabled={isUploading}
+              onChange={(e) => handlePhotoChange(e.target.files)}
+            />
+          </label>
+        )}
+
+        {uploadError && <p className="text-xs text-red-400">{uploadError}</p>}
       </div>
 
+      {/* メモ */}
       <div className="space-y-2">
-        <label>メモ</label>
+        <label className="text-sm font-medium">メモ</label>
         <textarea
-          className="w-full border p-2 rounded text-black"
+          className="w-full bg-white/10 border border-white/20 text-white placeholder-white/40 p-3 rounded-lg outline-none focus:ring-2 focus:ring-white/30 resize-none"
+          rows={3}
+          placeholder="飲んだ感想など"
           value={memo}
-          onChange={(e)=>setMemo(e.target.value)}
+          onChange={(e) => setMemo(e.target.value)}
         />
       </div>
 
       <button
-        disabled={!canGoConfirm || isUploading}
-        onClick={()=>setStep("confirm")}
-        className="w-full bg-black text-white rounded px-4 py-3 disabled:opacity-50"
+        type="button"
+        disabled={!canGoConfirm}
+        onClick={() => setStep("confirm")}
+        className="w-full bg-white text-black rounded-lg px-4 py-3 font-medium disabled:opacity-40 hover:bg-gray-100 transition"
       >
         確認画面へ
       </button>
-
     </div>
   );
 }
 
-function Row({label,value}:{label:string,value:string}){
+function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-4">
-      <div className="w-24 text-gray-500">{label}</div>
-      <div>{value}</div>
+      <div className="w-24 text-white/50 shrink-0">{label}</div>
+      <div className="text-white/90">{value}</div>
     </div>
   );
 }
