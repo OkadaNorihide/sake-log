@@ -150,7 +150,7 @@ export default function HomePage() {
             <div className="h-1 w-1 rounded-full bg-white/40" />
             <div className="h-px w-16 bg-white/30" />
           </div>
-          <p className="text-base md:text-lg text-white/60 leading-relaxed tracking-wide">
+          <p className="text-sm md:text-base text-white/60 leading-relaxed tracking-wide">
             その一杯は、二度と同じではない。<br />
             あなたの記憶と感動を、みんなと分かち合う場所。
           </p>
@@ -259,12 +259,16 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* 件数表示 */}
-        {!loading && hasFilter && (
-          <p className="text-xs text-white/50 -mt-4">
-            {sorted.length} 件ヒット
-          </p>
-        )}
+        {/* セクション見出し */}
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold tracking-wide">
+            {hasFilter || q.trim() ? "検索結果" : "直近の投稿"}
+          </h2>
+          <div className="flex-1 h-px bg-white/20" />
+          {!loading && (
+            <span className="text-xs text-white/40 shrink-0">{sorted.length}件</span>
+          )}
+        </div>
 
         {/* 銘柄一覧 */}
         {loading ? (
