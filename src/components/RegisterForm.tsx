@@ -105,15 +105,11 @@ export default function RegisterForm({ defaultName = "" }: Props) {
         urls.push(url);
       }
       setImages((prev) => [...prev, ...urls]);
-      // ローカルプレビューをCloudinary URLで置き換え
       setLocalPreviews([]);
-      // ファイル入力をリセット（同じファイルを再選択できるように）
-      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "unknown error";
       setUploadError(`アップロード失敗: ${msg}`);
       setLocalPreviews([]);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     } finally {
       setIsUploading(false);
     }
