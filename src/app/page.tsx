@@ -191,7 +191,7 @@ export default function HomePage() {
             <div className="space-y-2">
               <p className="text-xs text-white/50 tracking-wider">評価から探す</p>
               <div className="flex flex-wrap gap-2">
-                {[5, 4, 3].map((r) => (
+                {[4.5, 4, 3.5, 3].map((r) => (
                   <button
                     key={r}
                     onClick={() => setFilterRating(filterRating === r ? null : r)}
@@ -201,7 +201,7 @@ export default function HomePage() {
                         : "border-white/25 hover:bg-white/10"
                     }`}
                   >
-                    {"★".repeat(r)}{r < 5 ? "以上" : "のみ"}
+                    ★{r}以上
                   </button>
                 ))}
               </div>

@@ -316,7 +316,7 @@ export default function RegisterForm({ defaultName = "" }: Props) {
             <input
               type="file"
               multiple
-              accept="image/*,image/heic,image/heif"
+              accept="image/*"
               className="hidden"
               disabled={isUploading}
               onChange={(e) => handlePhotoChange(e.target.files)}
