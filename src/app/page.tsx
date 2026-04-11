@@ -150,18 +150,34 @@ export default function HomePage() {
       <div className="absolute inset-0 bg-black/40" />
 
       <div className="relative z-10 p-6 max-w-5xl mx-auto space-y-8">
-        <header className="flex items-center justify-between gap-3">
-          <h1 className="text-3xl font-bold tracking-wide drop-shadow-lg">
-            SAKE-LOG
-          </h1>
 
-          <Link
-            href="/register"
-            className="bg-white text-black rounded px-5 py-2 font-medium hover:bg-gray-200 transition"
-          >
-            ＋ お酒を登録
-          </Link>
-        </header>
+        {/* ヒーローセクション */}
+        <section className="text-center pt-10 pb-4 space-y-5">
+          <h1 className="text-5xl md:text-7xl font-bold tracking-[0.15em] drop-shadow-lg">
+            Ichigo LOG
+          </h1>
+          <p className="text-sm md:text-base text-white/75 tracking-widest">
+            〜一期一会の体験と感動の共有〜
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            <div className="h-px w-16 bg-white/30" />
+            <div className="h-1 w-1 rounded-full bg-white/40" />
+            <div className="h-px w-16 bg-white/30" />
+          </div>
+          <p className="text-sm md:text-base text-white/65 leading-[2] tracking-wide">
+            その一杯は、二度と同じではない。<br />
+            あなたが出会ったお酒の記憶と感動を、<br />
+            みんなと分かち合うための場所です。
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/register"
+              className="inline-block bg-white text-black rounded-full px-8 py-3 font-medium hover:bg-gray-100 transition shadow-lg tracking-wide"
+            >
+              ＋ お酒を登録する
+            </Link>
+          </div>
+        </section>
 
         <section className="bg-white/10 backdrop-blur-md rounded-2xl p-6 flex flex-col md:flex-row gap-4">
           <input
