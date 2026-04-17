@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 const TASTES = ["フルーティー", "甘い", "スモーキー", "軽い", "コク", "スパイシー"];
 const SCENES = ["家飲み", "バー", "居酒屋", "贈答", "特別な日"];
+const WHISKY_CATEGORIES = ["ジャパニーズ", "スコッチ", "バーボン", "アイリッシュ", "ブレンデッド", "その他"];
 
 type Review = {
   id: string;
@@ -14,7 +15,16 @@ type Review = {
   scenes: string[];
   memo: string;
   images?: string[];
+  category: string;
   created_at: string;
+};
+
+type BottleInfoItem = {
+  name: string;
+  summary: string;
+  hero_image_url: string;
+  category: string | null;
+  drink_type: string;
 };
 
 type BottleSummary = {
@@ -26,6 +36,9 @@ type BottleSummary = {
   thumbUrl?: string;
   allTastes: string[];
   allScenes: string[];
+  category: string | null;
+  summary: string;
+  hasReviews: boolean;
 };
 
 function round1(n: number) {
@@ -46,7 +59,8 @@ function toThumbUrl(url: string) {
   return url.replace("/upload/", "/upload/f_auto,q_auto,c_fill,w_200,h_200/");
 }
 
-function buildSummaries(reviews: Review[]): BottleSummary[] {
+// レビューからボトルサマリを生成
+function buildSummariesFromReviews(reviews: Review[]): Map<string, BottleSummary> {
   const byName = new Map<string, Review[]>();
   for (const r of reviews) {
     const name = (r.name ?? "").trim();
@@ -56,7 +70,7 @@ function buildSummaries(reviews: Review[]): BottleSummary[] {
     byName.set(name, arr);
   }
 
-  const summaries: BottleSummary[] = [];
+  const summaries = new Map<string, BottleSummary>();
   for (const [name, rs] of byName.entries()) {
     const reviewCount = rs.length;
     const avgRating = rs.reduce((s, r) => s + (Number(r.rating) || 0), 0) / reviewCount;
@@ -66,7 +80,16 @@ function buildSummaries(reviews: Review[]): BottleSummary[] {
     const latestReview = rs.filter((r) => r.created_at).sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0] ?? rs[0];
     const rawThumb = latestReview?.images?.[0];
 
-    summaries.push({
+    // 最も多いカテゴリを採用
+    const categoryCount = new Map<string, number>();
+    for (const r of rs) {
+      if (r.category && r.category !== "不明") {
+        categoryCount.set(r.category, (categoryCount.get(r.category) ?? 0) + 1);
+      }
+    }
+    const topCategory = [...categoryCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+    summaries.set(name, {
       name,
       avgRating: round1(avgRating),
       reviewCount,
@@ -75,6 +98,9 @@ function buildSummaries(reviews: Review[]): BottleSummary[] {
       thumbUrl: rawThumb ? toThumbUrl(rawThumb) : undefined,
       allTastes: [...new Set(allTastesFlat)],
       allScenes: [...new Set(allScenesFlat)],
+      category: topCategory,
+      summary: "",
+      hasReviews: true,
     });
   }
   return summaries;
@@ -84,41 +110,78 @@ type SortKey = "reviewCount" | "avgRating" | "latest";
 
 export default function HomePage() {
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [bottleInfos, setBottleInfos] = useState<BottleInfoItem[]>([]);
   const [q, setQ] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("reviewCount");
   const [loading, setLoading] = useState(true);
 
+  const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [filterRating, setFilterRating] = useState<number | null>(null);
   const [filterTaste, setFilterTaste] = useState<string | null>(null);
   const [filterScene, setFilterScene] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchReviews = async () => {
+    const fetchAll = async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/reviews", { cache: "no-store" });
-        const json = (await res.json()) as { items?: Review[]; error?: string };
-        if (!res.ok) throw new Error(json.error || "failed");
-        setReviews(Array.isArray(json.items) ? json.items : []);
+        const [reviewsRes, infosRes] = await Promise.all([
+          fetch("/api/reviews", { cache: "no-store" }),
+          fetch("/api/bottle-infos", { cache: "no-store" }),
+        ]);
+        const reviewsJson = await reviewsRes.json();
+        const infosJson = await infosRes.json();
+        setReviews(Array.isArray(reviewsJson.items) ? reviewsJson.items : []);
+        setBottleInfos(Array.isArray(infosJson.items) ? infosJson.items : []);
       } catch {
         setReviews([]);
+        setBottleInfos([]);
       } finally {
         setLoading(false);
       }
     };
-    fetchReviews();
+    fetchAll();
   }, []);
 
-  const summaries = useMemo(() => buildSummaries(reviews), [reviews]);
+  const summaries = useMemo(() => {
+    const fromReviews = buildSummariesFromReviews(reviews);
+
+    // bottle_info のみのエントリを追加（レビューがないもの）
+    for (const info of bottleInfos) {
+      if (!fromReviews.has(info.name)) {
+        fromReviews.set(info.name, {
+          name: info.name,
+          avgRating: 0,
+          reviewCount: 0,
+          topTastes: [],
+          latestAt: "",
+          thumbUrl: info.hero_image_url ? toThumbUrl(info.hero_image_url) : undefined,
+          allTastes: [],
+          allScenes: [],
+          category: info.category,
+          summary: info.summary,
+          hasReviews: false,
+        });
+      } else {
+        // レビューあり銘柄にも summary と hero_image を補完
+        const existing = fromReviews.get(info.name)!;
+        if (!existing.summary) existing.summary = info.summary;
+        if (!existing.thumbUrl && info.hero_image_url) existing.thumbUrl = toThumbUrl(info.hero_image_url);
+        if (!existing.category) existing.category = info.category;
+      }
+    }
+
+    return [...fromReviews.values()];
+  }, [reviews, bottleInfos]);
 
   const filtered = useMemo(() => {
     let result = summaries;
     if (q.trim()) result = result.filter((s) => s.name.includes(q.trim()));
-    if (filterRating !== null) result = result.filter((s) => s.avgRating >= filterRating);
+    if (filterCategory !== null) result = result.filter((s) => s.category === filterCategory);
+    if (filterRating !== null) result = result.filter((s) => s.hasReviews && s.avgRating >= filterRating);
     if (filterTaste !== null) result = result.filter((s) => s.allTastes.includes(filterTaste));
     if (filterScene !== null) result = result.filter((s) => s.allScenes.includes(filterScene));
     return result;
-  }, [summaries, q, filterRating, filterTaste, filterScene]);
+  }, [summaries, q, filterCategory, filterRating, filterTaste, filterScene]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -128,7 +191,7 @@ export default function HomePage() {
     return arr;
   }, [filtered, sortKey]);
 
-  const hasFilter = filterRating !== null || filterTaste !== null || filterScene !== null;
+  const hasFilter = filterCategory !== null || filterRating !== null || filterTaste !== null || filterScene !== null;
 
   return (
     <div className="relative min-h-screen text-white">
@@ -164,7 +227,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* 検索・ソート */}
+        {/* 検索・フィルター */}
         <section className="bg-white/10 backdrop-blur-md rounded-2xl p-5 space-y-5">
           <div className="flex flex-col md:flex-row gap-3">
             <input
@@ -184,8 +247,27 @@ export default function HomePage() {
             </select>
           </div>
 
-          {/* カテゴリフィルター */}
           <div className="space-y-3">
+
+            {/* カテゴリで探す */}
+            <div className="space-y-2">
+              <p className="text-xs text-white/50 tracking-wider">カテゴリで探す</p>
+              <div className="flex flex-wrap gap-2">
+                {WHISKY_CATEGORIES.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setFilterCategory(filterCategory === c ? null : c)}
+                    className={`px-3 py-1 rounded-full text-sm border transition ${
+                      filterCategory === c
+                        ? "bg-amber-400 text-black border-amber-400"
+                        : "border-white/25 hover:bg-white/10"
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {/* 評価から探す */}
             <div className="space-y-2">
@@ -247,10 +329,9 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* フィルターリセット */}
             {hasFilter && (
               <button
-                onClick={() => { setFilterRating(null); setFilterTaste(null); setFilterScene(null); }}
+                onClick={() => { setFilterCategory(null); setFilterRating(null); setFilterTaste(null); setFilterScene(null); }}
                 className="text-xs text-white/50 underline hover:text-white/80 transition"
               >
                 フィルターをリセット
@@ -262,7 +343,7 @@ export default function HomePage() {
         {/* セクション見出し */}
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold tracking-wide">
-            {hasFilter || q.trim() ? "検索結果" : "直近の投稿"}
+            {hasFilter || q.trim() ? "検索結果" : "銘柄一覧"}
           </h2>
           <div className="flex-1 h-px bg-white/20" />
           {!loading && (
@@ -292,25 +373,46 @@ export default function HomePage() {
                     ) : (
                       <div className="h-16 w-16 rounded-lg bg-white/10 flex items-center justify-center text-xs text-gray-300">no photo</div>
                     )}
-                    <div className="text-lg font-semibold">{s.name}</div>
+                    <div className="space-y-1">
+                      <div className="text-lg font-semibold">{s.name}</div>
+                      {s.category && (
+                        <span className="text-xs bg-amber-400/20 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-full">
+                          {s.category}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="text-right text-sm shrink-0">
-                    ★ {s.avgRating.toFixed(1)}
-                    <div className="text-xs text-gray-300">{s.reviewCount}件</div>
+                    {s.hasReviews ? (
+                      <>
+                        ★ {s.avgRating.toFixed(1)}
+                        <div className="text-xs text-gray-300">{s.reviewCount}件</div>
+                      </>
+                    ) : (
+                      <div className="text-xs text-white/40">レビューなし</div>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {s.topTastes.map((t) => (
-                    <span key={t.label} className="text-xs bg-white/20 px-2 py-1 rounded-full">
-                      #{t.label} · {t.count}
-                    </span>
-                  ))}
-                </div>
+                {s.topTastes.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {s.topTastes.map((t) => (
+                      <span key={t.label} className="text-xs bg-white/20 px-2 py-1 rounded-full">
+                        #{t.label} · {t.count}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
-                <div className="text-xs text-gray-300">
-                  最終レビュー：{new Date(s.latestAt).toLocaleString("ja-JP")}
-                </div>
+                {!s.hasReviews && s.summary && (
+                  <p className="text-xs text-white/60 line-clamp-2">{s.summary}</p>
+                )}
+
+                {s.hasReviews && (
+                  <div className="text-xs text-gray-300">
+                    最終レビュー：{new Date(s.latestAt).toLocaleString("ja-JP")}
+                  </div>
+                )}
               </Link>
             ))}
           </section>

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 const TASTES = ["フルーティー", "甘い", "スモーキー", "軽い", "コク", "スパイシー"];
 const SCENES = ["家飲み", "バー", "居酒屋", "贈答", "特別な日"];
+const CATEGORIES = ["ジャパニーズ", "スコッチ", "バーボン", "アイリッシュ", "ブレンデッド", "その他", "不明"];
 
 type Step = "form" | "confirm" | "complete";
 
@@ -43,9 +44,6 @@ async function uploadToCloudinary(file: File): Promise<string> {
   return json.secure_url as string;
 }
 
-/* ----------------------------------------
-   Props
----------------------------------------- */
 type Props = {
   defaultName?: string;
 };
@@ -54,6 +52,7 @@ export default function RegisterForm({ defaultName = "" }: Props) {
   const [step, setStep] = useState<Step>("form");
 
   const [name, setName] = useState(defaultName);
+  const [category, setCategory] = useState("不明");
   const [rating, setRating] = useState(0);
   const [tastes, setTastes] = useState<string[]>([]);
   const [scenes, setScenes] = useState<string[]>([]);
@@ -72,7 +71,6 @@ export default function RegisterForm({ defaultName = "" }: Props) {
   const [scanCandidates, setScanCandidates] = useState<string[]>([]);
   const [scanError, setScanError] = useState("");
 
-  // 既存銘柄名を取得（予測変換用）
   useEffect(() => {
     fetch("/api/bottles", { cache: "no-store" })
       .then((r) => r.json())
@@ -95,10 +93,9 @@ export default function RegisterForm({ defaultName = "" }: Props) {
       formData.append("image", files[0]);
       const res = await fetch("/api/label-scan", { method: "POST", body: formData });
       const json = await res.json();
-      const candidates: string[] = Array.isArray(json.candidates) ? json.candidates : [];
-      setScanCandidates(candidates);
+      setScanCandidates(Array.isArray(json.candidates) ? json.candidates : []);
       setScanState("done");
-    } catch (e: unknown) {
+    } catch {
       setScanError("スキャンに失敗しました。手入力してください。");
       setScanState("error");
     }
@@ -112,12 +109,10 @@ export default function RegisterForm({ defaultName = "" }: Props) {
     if (!files || files.length === 0) return;
     setUploadError("");
 
-    // 現在の枚数 + 新規選択が3枚を超えないようにスライス
     const remaining = 3 - images.length;
     if (remaining <= 0) return;
     const arr = Array.from(files).slice(0, remaining);
 
-    // ローカルプレビューを先に表示
     const previews = arr.map((f) => URL.createObjectURL(f));
     setLocalPreviews((prev) => [...prev, ...previews]);
     setIsUploading(true);
@@ -148,7 +143,7 @@ export default function RegisterForm({ defaultName = "" }: Props) {
       const res = await fetch("/api/reviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), rating, tastes, scenes, memo: memo.trim(), images }),
+        body: JSON.stringify({ name: name.trim(), rating, tastes, scenes, memo: memo.trim(), images, category }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "failed");
@@ -158,6 +153,18 @@ export default function RegisterForm({ defaultName = "" }: Props) {
       const msg = e instanceof Error ? e.message : "unknown error";
       alert(`登録失敗: ${msg}`);
     }
+  };
+
+  const resetForm = () => {
+    setName(defaultName);
+    setCategory("不明");
+    setRating(0);
+    setTastes([]);
+    setScenes([]);
+    setMemo("");
+    setImages([]);
+    setCreatedId("");
+    setStep("form");
   };
 
   /* ---- 完了画面 ---- */
@@ -178,7 +185,7 @@ export default function RegisterForm({ defaultName = "" }: Props) {
         </div>
         <button
           className="w-full border border-white/20 rounded-lg px-4 py-2 hover:bg-white/10 transition"
-          onClick={() => { setName(defaultName); setRating(0); setTastes([]); setScenes([]); setMemo(""); setImages([]); setCreatedId(""); setStep("form"); }}
+          onClick={resetForm}
         >
           続けて登録
         </button>
@@ -194,6 +201,7 @@ export default function RegisterForm({ defaultName = "" }: Props) {
           <h2 className="text-xl font-bold">登録内容確認</h2>
           <div className="space-y-2 text-sm">
             <Row label="銘柄名" value={name} />
+            <Row label="カテゴリ" value={category} />
             <Row label="評価" value={"★".repeat(rating)} />
             <Row label="味" value={tastes.join(", ") || "なし"} />
             <Row label="シーン" value={scenes.join(", ") || "なし"} />
@@ -247,7 +255,7 @@ export default function RegisterForm({ defaultName = "" }: Props) {
           <p className="text-xs text-white/50">銘柄ページから引き継がれています</p>
         )}
 
-        {/* ラベルスキャン（defaultNameがない場合のみ表示） */}
+        {/* ラベルスキャン */}
         {!defaultName && (
           <div className="space-y-2">
             <label className={`inline-flex items-center gap-2 px-3 py-1.5 border border-white/25 rounded-lg text-xs cursor-pointer hover:bg-white/10 transition ${scanState === "scanning" ? "opacity-50 pointer-events-none" : ""}`}>
@@ -276,16 +284,31 @@ export default function RegisterForm({ defaultName = "" }: Props) {
                 </div>
               </div>
             )}
-
             {scanState === "done" && scanCandidates.length === 0 && (
               <p className="text-xs text-white/50">候補が見つかりませんでした。手入力してください。</p>
             )}
-
             {scanState === "error" && (
               <p className="text-xs text-red-400">{scanError}</p>
             )}
           </div>
         )}
+      </div>
+
+      {/* カテゴリ */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">カテゴリ</label>
+        <div className="flex flex-wrap gap-2">
+          {CATEGORIES.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCategory(c)}
+              className={`px-3 py-1 border rounded-full text-sm transition ${category === c ? "bg-white text-black border-white" : "border-white/30 hover:bg-white/10"}`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 評価 */}
@@ -300,7 +323,7 @@ export default function RegisterForm({ defaultName = "" }: Props) {
         </div>
       </div>
 
-      {/* 味 */}
+      {/* 味わい */}
       <div className="space-y-2">
         <label className="text-sm font-medium">味わい</label>
         <div className="flex flex-wrap gap-2">
@@ -337,8 +360,6 @@ export default function RegisterForm({ defaultName = "" }: Props) {
       {/* 写真 */}
       <div className="space-y-3">
         <label className="text-sm font-medium">写真（最大3枚）</label>
-
-        {/* プレビュー */}
         {allPreviews.length > 0 && (
           <div className="flex gap-2 flex-wrap">
             {allPreviews.map((src, idx) => (
@@ -362,32 +383,16 @@ export default function RegisterForm({ defaultName = "" }: Props) {
             ))}
           </div>
         )}
-
-        {/* アップロードボタン（labelでinputを包む — programmatic clickより確実） */}
         {allPreviews.length < 3 && (
-          <label
-            className={`inline-flex items-center gap-2 px-4 py-2 border border-white/30 rounded-lg text-sm cursor-pointer hover:bg-white/10 transition ${isUploading ? "opacity-50 pointer-events-none" : ""}`}
-          >
+          <label className={`inline-flex items-center gap-2 px-4 py-2 border border-white/30 rounded-lg text-sm cursor-pointer hover:bg-white/10 transition ${isUploading ? "opacity-50 pointer-events-none" : ""}`}>
             {isUploading ? (
-              <>
-                <span className="animate-spin inline-block">⟳</span> アップロード中...
-              </>
+              <><span className="animate-spin inline-block">⟳</span> アップロード中...</>
             ) : (
-              <>
-                <span>＋</span> 写真を追加
-              </>
+              <><span>＋</span> 写真を追加</>
             )}
-            <input
-              type="file"
-              multiple
-              accept="image/*"
-              className="hidden"
-              disabled={isUploading}
-              onChange={(e) => handlePhotoChange(e.target.files)}
-            />
+            <input type="file" multiple accept="image/*" className="hidden" disabled={isUploading} onChange={(e) => handlePhotoChange(e.target.files)} />
           </label>
         )}
-
         {uploadError && <p className="text-xs text-red-400">{uploadError}</p>}
       </div>
 

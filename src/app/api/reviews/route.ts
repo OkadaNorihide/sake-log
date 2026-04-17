@@ -9,6 +9,7 @@ type ReviewRow = {
   scenes: string[];
   memo: string;
   images: string[];
+  category: string;
   created_at: string;
   likes_count: number;
 };
@@ -17,7 +18,7 @@ export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
       .from("reviews")
-      .select("id, name, rating, tastes, scenes, memo, images, created_at, likes_count")
+      .select("id, name, rating, tastes, scenes, memo, images, category, created_at, likes_count")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
       scenes?: string[];
       memo?: string;
       images?: string[];
+      category?: string;
     };
 
     const name = (body.name ?? "").trim();
@@ -47,6 +49,7 @@ export async function POST(req: NextRequest) {
     const scenes = Array.isArray(body.scenes) ? body.scenes : [];
     const memo = (body.memo ?? "").trim();
     const images = Array.isArray(body.images) ? body.images : [];
+    const category = (body.category ?? "不明").trim();
 
     if (!name) {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
@@ -58,15 +61,8 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from("reviews")
-      .insert({
-        name,
-        rating,
-        tastes,
-        scenes,
-        memo,
-        images,
-      })
-      .select("id, name, rating, tastes, scenes, memo, images, created_at, likes_count")
+      .insert({ name, rating, tastes, scenes, memo, images, category })
+      .select("id, name, rating, tastes, scenes, memo, images, category, created_at, likes_count")
       .single();
 
     if (error) {
