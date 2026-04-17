@@ -64,6 +64,7 @@ export default function RegisterForm({ defaultName = "" }: Props) {
   const [uploadError, setUploadError] = useState("");
 
   const [bottleNames, setBottleNames] = useState<string[]>([]);
+  const [aliasMap, setAliasMap] = useState<Map<string, string>>(new Map());
   const [createdId, setCreatedId] = useState("");
 
   // ラベルスキャン
@@ -74,7 +75,14 @@ export default function RegisterForm({ defaultName = "" }: Props) {
   useEffect(() => {
     fetch("/api/bottles", { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => setBottleNames(Array.isArray(j.names) ? j.names : []))
+      .then((j) => {
+        setBottleNames(Array.isArray(j.names) ? j.names : []);
+        const map = new Map<string, string>();
+        for (const { alias, canonical } of (j.aliases ?? [])) {
+          map.set(alias as string, canonical as string);
+        }
+        setAliasMap(map);
+      })
       .catch(() => {});
   }, []);
 
@@ -241,7 +249,11 @@ export default function RegisterForm({ defaultName = "" }: Props) {
           className="w-full bg-white/10 border border-white/20 text-white placeholder-white/40 p-3 rounded-lg outline-none focus:ring-2 focus:ring-white/30"
           placeholder="例：山崎、白州、..."
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            // エイリアス（yomi/romaji/name_en）が入力されたら正規名に変換
+            setName(aliasMap.get(v) ?? v);
+          }}
           readOnly={!!defaultName}
         />
         {bottleNames.length > 0 && (

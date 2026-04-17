@@ -4,14 +4,13 @@
  * マッチング戦略:
  * 1. トークン部分一致 × IDF重み（汎用ワードのスコアを下げる）
  * 2. バイグラム類似度（Dice係数）でファジーマッチ
- * 3. 両スコアを合算して上位 MAX_CANDIDATES 件を返す
+ * 3. name / name_en / yomi / romaji をすべて検索対象にする
  */
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const MAX_CANDIDATES = 3;
 
-// 汎用すぎるワードはマッチングから除外
 const STOPWORDS = new Set([
   "シングルモルト", "ブレンデッド", "ウィスキー", "whiskey", "whisky",
   "single", "malt", "blended", "irish", "scotch", "bourbon", "japanese",
@@ -21,6 +20,13 @@ const STOPWORDS = new Set([
   "モルト", "グレーン", "ピュア", "リザーブ", "スペシャル", "ピーテッド",
 ]);
 
+type BottleEntry = {
+  name: string;
+  name_en: string | null;
+  yomi: string | null;
+  romaji: string | null;
+};
+
 // ---------- tokenize ----------
 function tokenize(text: string): string[] {
   return text
@@ -29,13 +35,11 @@ function tokenize(text: string): string[] {
     .filter((t) => t.length >= 2 && !STOPWORDS.has(t));
 }
 
-// ---------- bigram similarity (Dice) ----------
+// ---------- bigram similarity ----------
 function bigrams(str: string): string[] {
   const s = str.toLowerCase().replace(/\s+/g, "");
   const result: string[] = [];
-  for (let i = 0; i < s.length - 1; i++) {
-    result.push(s.slice(i, i + 2));
-  }
+  for (let i = 0; i < s.length - 1; i++) result.push(s.slice(i, i + 2));
   return result;
 }
 
@@ -47,21 +51,26 @@ function diceSimilarity(a: string, b: string): number {
   return (2 * overlap) / (bg1.length + bg2.size);
 }
 
-function maxDice(bottleName: string, tokens: string[]): number {
-  if (tokens.length === 0) return 0;
-  return Math.max(...tokens.map((t) => diceSimilarity(bottleName, t)));
+function maxDice(searchTexts: string[], tokens: string[]): number {
+  if (tokens.length === 0 || searchTexts.length === 0) return 0;
+  return Math.max(
+    ...searchTexts.flatMap((text) =>
+      tokens.map((t) => diceSimilarity(text, t))
+    )
+  );
 }
 
-// ---------- IDF-weighted token score ----------
-function buildIdf(names: string[]): Map<string, number> {
+// ---------- IDF ----------
+function buildIdf(entries: BottleEntry[]): Map<string, number> {
   const df = new Map<string, number>();
-  for (const name of names) {
-    const tokens = new Set(tokenize(name));
-    for (const t of tokens) {
-      df.set(t, (df.get(t) ?? 0) + 1);
-    }
+  for (const entry of entries) {
+    const combined = [entry.name, entry.name_en, entry.yomi, entry.romaji]
+      .filter(Boolean)
+      .join(" ");
+    const tokens = new Set(tokenize(combined));
+    for (const t of tokens) df.set(t, (df.get(t) ?? 0) + 1);
   }
-  const N = names.length;
+  const N = entries.length;
   const idf = new Map<string, number>();
   for (const [token, count] of df) {
     idf.set(token, Math.log((N + 1) / (count + 1)) + 1);
@@ -70,16 +79,18 @@ function buildIdf(names: string[]): Map<string, number> {
 }
 
 function tokenScore(
-  bottleName: string,
+  searchTexts: string[],
   tokens: string[],
   idf: Map<string, number>
 ): number {
-  const lower = bottleName.toLowerCase();
   let s = 0;
-  for (const token of tokens) {
-    const weight = idf.get(token) ?? 1;
-    if (lower.includes(token)) s += token.length * weight;
-    if (token.includes(lower)) s += lower.length * 2 * weight;
+  for (const searchText of searchTexts) {
+    const lower = searchText.toLowerCase();
+    for (const token of tokens) {
+      const weight = idf.get(token) ?? 1;
+      if (lower.includes(token)) s += token.length * weight;
+      if (token.includes(lower)) s += lower.length * 2 * weight;
+    }
   }
   return s;
 }
@@ -92,16 +103,22 @@ export async function findCandidates(ocrText: string): Promise<string[]> {
   const effectiveTokens =
     tokens.length > 0 ? tokens : [ocrText.trim().toLowerCase()];
 
-  // bottle_master から取得（失敗時は reviews にフォールバック）
-  let names: string[] = [];
+  // bottle_master から name + name_en + yomi + romaji を取得
+  let entries: BottleEntry[] = [];
 
   const { data: masterData } = await supabaseAdmin
     .from("bottle_master")
-    .select("name");
+    .select("name, name_en, yomi, romaji");
 
   if (masterData && masterData.length > 0) {
-    names = masterData.map((r) => r.name as string);
+    entries = masterData.map((r) => ({
+      name: r.name as string,
+      name_en: (r.name_en as string | null) ?? null,
+      yomi: (r.yomi as string | null) ?? null,
+      romaji: (r.romaji as string | null) ?? null,
+    }));
   } else {
+    // マスタが空なら reviews にフォールバック
     const { data: reviewData } = await supabaseAdmin
       .from("reviews")
       .select("name");
@@ -110,20 +127,21 @@ export async function findCandidates(ocrText: string): Promise<string[]> {
         (reviewData ?? []).map((r) => r.name as string).filter(Boolean)
       ),
     ];
-    names = unique;
+    entries = unique.map((n) => ({ name: n, name_en: null, yomi: null, romaji: null }));
   }
 
-  if (names.length === 0) return [];
+  if (entries.length === 0) return [];
 
-  // IDF計算
-  const idf = buildIdf(names);
+  const idf = buildIdf(entries);
 
-  // スコアリング
-  const scored = names
-    .map((n) => {
-      const ts = tokenScore(n, effectiveTokens, idf);
-      const ds = maxDice(n, effectiveTokens);
-      return { name: n, score: ts + ds * 10 };
+  const scored = entries
+    .map((entry) => {
+      const searchTexts = [entry.name, entry.name_en, entry.yomi, entry.romaji].filter(
+        (t): t is string => Boolean(t)
+      );
+      const ts = tokenScore(searchTexts, effectiveTokens, idf);
+      const ds = maxDice(searchTexts, effectiveTokens);
+      return { name: entry.name, score: ts + ds * 10 };
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, MAX_CANDIDATES)
