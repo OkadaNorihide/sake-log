@@ -1,23 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import sharp from "sharp";
-import { extractTextFromImage } from "@/lib/ocr";
+import { identifyBottleFromImage } from "@/lib/bottleIdentifier";
 import { findCandidates } from "@/lib/productMatcher";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const runtime = "nodejs";
 
-const ROTATIONS = [0, 90, 180, 270] as const;
-
-async function rotateToBase64(buffer: Buffer, angle: number): Promise<string> {
-  const rotated =
-    angle === 0
-      ? buffer
-      : await sharp(buffer).rotate(angle).toBuffer();
-  return rotated.toString("base64");
-}
-
 export async function POST(req: NextRequest) {
-  let combinedText = "";
+  let rawText = "";
   let candidates: string[] = [];
   let errorMsg: string | null = null;
 
@@ -31,22 +20,11 @@ export async function POST(req: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    // 4方向でOCRを試み、テキストを結合
-    const texts: string[] = [];
-    for (const angle of ROTATIONS) {
-      try {
-        const base64 = await rotateToBase64(buffer, angle);
-        const text = await extractTextFromImage(base64);
-        if (text.trim()) texts.push(text.trim());
-      } catch (e) {
-        console.warn(`[label-scan] OCR failed at ${angle}°:`, e);
-      }
-    }
+    // Claude Vision でボトルを識別
+    rawText = await identifyBottleFromImage(buffer);
 
-    combinedText = texts.join("\n");
-
-    // 結合テキストでマッチング
-    candidates = await findCandidates(combinedText);
+    // bottle_master とマッチング
+    candidates = await findCandidates(rawText);
   } catch (e: unknown) {
     errorMsg = e instanceof Error ? e.message : String(e);
     console.error("[label-scan] error:", errorMsg);
@@ -55,7 +33,7 @@ export async function POST(req: NextRequest) {
   // ログ保存
   try {
     await supabaseAdmin.from("ocr_scan_logs").insert({
-      raw_text: combinedText || null,
+      raw_text: rawText || null,
       candidates,
       error_msg: errorMsg,
     });
@@ -63,5 +41,5 @@ export async function POST(req: NextRequest) {
     console.warn("[label-scan] log save failed:", logErr);
   }
 
-  return NextResponse.json({ candidates, rawText: combinedText || null });
+  return NextResponse.json({ candidates, rawText: rawText || null });
 }
