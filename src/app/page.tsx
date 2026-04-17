@@ -41,6 +41,14 @@ type BottleSummary = {
   hasReviews: boolean;
 };
 
+// 検索正規化：スペース除去・小文字化・カタカナ→ひらがな変換
+function normalizeSearch(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[ァ-ン]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
+}
+
 function round1(n: number) {
   return Math.round(n * 10) / 10;
 }
@@ -175,7 +183,10 @@ export default function HomePage() {
 
   const filtered = useMemo(() => {
     let result = summaries;
-    if (q.trim()) result = result.filter((s) => s.name.includes(q.trim()));
+    if (q.trim()) {
+      const nq = normalizeSearch(q);
+      result = result.filter((s) => normalizeSearch(s.name).includes(nq));
+    }
     if (filterCategory !== null) result = result.filter((s) => s.category === filterCategory);
     if (filterRating !== null) result = result.filter((s) => s.hasReviews && s.avgRating >= filterRating);
     if (filterTaste !== null) result = result.filter((s) => s.allTastes.includes(filterTaste));
