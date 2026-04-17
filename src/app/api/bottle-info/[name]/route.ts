@@ -6,6 +6,7 @@ type BottleInfoRow = {
   summary: string;
   amazon_url: string;
   rakuten_url: string;
+  hero_image_url: string;
   updated_at: string;
 };
 
@@ -18,7 +19,7 @@ export async function GET(
 
   const { data, error } = await supabaseAdmin
     .from("bottle_info")
-    .select("name, summary, amazon_url, rakuten_url, updated_at")
+    .select("name, summary, amazon_url, rakuten_url, hero_image_url, updated_at")
     .eq("name", decodedName)
     .maybeSingle();
 
@@ -40,6 +41,7 @@ export async function PUT(
     summary?: string;
     amazon_url?: string;
     rakuten_url?: string;
+    hero_image_url?: string;
   };
 
   const { data, error } = await supabaseAdmin
@@ -50,11 +52,12 @@ export async function PUT(
         summary: (body.summary ?? "").trim(),
         amazon_url: (body.amazon_url ?? "").trim(),
         rakuten_url: (body.rakuten_url ?? "").trim(),
+        hero_image_url: (body.hero_image_url ?? "").trim(),
         updated_at: new Date().toISOString(),
       },
       { onConflict: "name" }
     )
-    .select("name, summary, amazon_url, rakuten_url, updated_at")
+    .select("name, summary, amazon_url, rakuten_url, hero_image_url, updated_at")
     .single();
 
   if (error) {

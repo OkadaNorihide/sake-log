@@ -8,6 +8,7 @@ type BottleInfo = {
   summary: string;
   amazon_url: string;
   rakuten_url: string;
+  hero_image_url: string;
 };
 
 type Review = {
@@ -34,36 +35,44 @@ function countTop(list: string[], topN: number) {
     .map(([label, count]) => ({ label, count }));
 }
 
-/* -----------------------------
-   Cloudinary変換（HEIC対応）
------------------------------- */
 function cloudinaryTransform(url: string, transform: string) {
   if (!url?.includes("res.cloudinary.com")) return url;
   return url.replace("/upload/", `/upload/${transform}/`);
 }
-
 function toThumbUrl(url: string) {
   return cloudinaryTransform(url, "f_auto,q_auto,c_fill,w_220,h_220");
 }
-
 function toPreviewUrl(url: string) {
-  return cloudinaryTransform(url, "f_auto,q_auto,c_fill,w_900,h_900");
+  return cloudinaryTransform(url, "f_auto,q_auto,c_limit,w_1200");
 }
 
-/* -----------------------------
-   重複除外ユーティリティ
------------------------------- */
 function uniqKeepOrder(arr: string[]) {
   const seen = new Set<string>();
-  const out: string[] = [];
-  for (const x of arr) {
-    if (!x) continue;
-    if (seen.has(x)) continue;
-    seen.add(x);
-    out.push(x);
-  }
-  return out;
+  return arr.filter((x) => { if (!x || seen.has(x)) return false; seen.add(x); return true; });
 }
+
+async function uploadHeroImage(file: File): Promise<string> {
+  const res = await fetch("/api/cloudinary/sign", { cache: "no-store" });
+  if (!res.ok) throw new Error("署名取得失敗");
+  const { cloudName, apiKey, timestamp, signature, folder } = await res.json();
+
+  const form = new FormData();
+  form.append("file", file);
+  form.append("api_key", apiKey);
+  form.append("timestamp", String(timestamp));
+  form.append("signature", signature);
+  if (folder) form.append("folder", folder);
+
+  const up = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+    method: "POST",
+    body: form,
+  });
+  const json = await up.json();
+  if (!up.ok) throw new Error(json?.error?.message || "アップロード失敗");
+  return json.secure_url as string;
+}
+
+const EMPTY_INFO: BottleInfo = { summary: "", amazon_url: "", rakuten_url: "", hero_image_url: "" };
 
 export default function BottleDetailPage() {
   const params = useParams<{ name: string }>();
@@ -73,52 +82,52 @@ export default function BottleDetailPage() {
   const [all, setAll] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [info, setInfo] = useState<BottleInfo>({ summary: "", amazon_url: "", rakuten_url: "" });
+  const [info, setInfo] = useState<BottleInfo>(EMPTY_INFO);
   const [infoLoading, setInfoLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<BottleInfo>({ summary: "", amazon_url: "", rakuten_url: "" });
+  const [draft, setDraft] = useState<BottleInfo>(EMPTY_INFO);
   const [saving, setSaving] = useState(false);
+  const [uploadingHero, setUploadingHero] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   useEffect(() => {
-    const fetchReviews = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch("/api/reviews", { cache: "no-store" });
-        const json = (await res.json()) as { items?: Review[]; error?: string };
-        if (!res.ok) throw new Error(json.error || "failed");
-        setAll(Array.isArray(json.items) ? json.items : []);
-      } catch {
-        setAll([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchReviews();
+    fetch("/api/reviews", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setAll(Array.isArray(j.items) ? j.items : []))
+      .catch(() => setAll([]))
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     if (!decodedName) return;
-    const fetchInfo = async () => {
-      setInfoLoading(true);
-      try {
-        const res = await fetch(`/api/bottle-info/${encodeURIComponent(decodedName)}`, { cache: "no-store" });
-        const json = await res.json();
-        if (json.item) {
-          setInfo({ summary: json.item.summary ?? "", amazon_url: json.item.amazon_url ?? "", rakuten_url: json.item.rakuten_url ?? "" });
-        }
-      } catch {
-        // テーブルがなければ無視
-      } finally {
-        setInfoLoading(false);
-      }
-    };
-    fetchInfo();
+    fetch(`/api/bottle-info/${encodeURIComponent(decodedName)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.item) setInfo({
+          summary: j.item.summary ?? "",
+          amazon_url: j.item.amazon_url ?? "",
+          rakuten_url: j.item.rakuten_url ?? "",
+          hero_image_url: j.item.hero_image_url ?? "",
+        });
+      })
+      .catch(() => {})
+      .finally(() => setInfoLoading(false));
   }, [decodedName]);
 
-  const startEdit = () => {
-    setDraft({ ...info });
-    setEditing(true);
+  const startEdit = () => { setDraft({ ...info }); setUploadError(""); setEditing(true); };
+
+  const handleHeroUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploadError("");
+    setUploadingHero(true);
+    try {
+      const url = await uploadHeroImage(files[0]);
+      setDraft((d) => ({ ...d, hero_image_url: url }));
+    } catch (e: unknown) {
+      setUploadError(e instanceof Error ? e.message : "アップロード失敗");
+    } finally {
+      setUploadingHero(false);
+    }
   };
 
   const saveInfo = async () => {
@@ -130,9 +139,13 @@ export default function BottleDetailPage() {
         body: JSON.stringify(draft),
       });
       const json = await res.json();
-      if (json.item) {
-        setInfo({ summary: json.item.summary ?? "", amazon_url: json.item.amazon_url ?? "", rakuten_url: json.item.rakuten_url ?? "" });
-      }
+      if (!res.ok) throw new Error(json.error || "failed");
+      setInfo({
+        summary: json.item.summary ?? "",
+        amazon_url: json.item.amazon_url ?? "",
+        rakuten_url: json.item.rakuten_url ?? "",
+        hero_image_url: json.item.hero_image_url ?? "",
+      });
       setEditing(false);
     } catch {
       alert("保存に失敗しました");
@@ -143,33 +156,22 @@ export default function BottleDetailPage() {
 
   const reviews = useMemo(() => {
     const filtered = all.filter((r) => (r.name ?? "").trim() === decodedName);
-    filtered.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-    return filtered;
+    return filtered.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
   }, [all, decodedName]);
 
   const summary = useMemo(() => {
     if (reviews.length === 0) return null;
-
-    const avg =
-      reviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / reviews.length;
-
-    const allTastes = reviews.flatMap((r) =>
-      Array.isArray(r.tastes) ? r.tastes : []
-    );
-    const topTastes = countTop(allTastes, 3);
-
-    const collected = uniqKeepOrder(
+    const avg = reviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / reviews.length;
+    const allTastes = reviews.flatMap((r) => (Array.isArray(r.tastes) ? r.tastes : []));
+    const fallbackUrls = uniqKeepOrder(
       reviews.flatMap((r) => (Array.isArray(r.images) ? r.images : []))
-    ).slice(0, 3);
-
-    const heroUrls = collected.map((u) => toPreviewUrl(u));
-
+    ).slice(0, 3).map((u) => toPreviewUrl(u));
     return {
       avgRating: round1(avg),
       reviewCount: reviews.length,
-      topTastes,
+      topTastes: countTop(allTastes, 3),
       latestAt: reviews[0]?.created_at ?? "",
-      heroUrls,
+      fallbackUrls,
     };
   }, [reviews]);
 
@@ -177,63 +179,51 @@ export default function BottleDetailPage() {
     return (
       <div className="p-6 max-w-3xl mx-auto space-y-4">
         <div className="rounded-lg border p-6">銘柄名が取得できませんでした。</div>
-        <Link href="/" className="underline text-sm">
-          一覧へ戻る
-        </Link>
+        <Link href="/" className="underline text-sm">一覧へ戻る</Link>
       </div>
     );
   }
 
+  // ヒーロー画像：固定設定 > レビュー画像フォールバック
+  const heroImages = info.hero_image_url
+    ? [toPreviewUrl(info.hero_image_url)]
+    : (summary?.fallbackUrls ?? []);
+
   return (
     <div className="relative min-h-screen text-white">
-      <div
-        className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: "url('/bottle-bg.jpg')" }}
-      />
+      <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/bottle-bg.jpg')" }} />
       <div className="absolute inset-0 bg-black/75" />
 
       <div className="relative z-10 p-6 max-w-5xl mx-auto space-y-6">
         <header className="flex items-start justify-between gap-4">
           <div className="space-y-2">
-            <h1 className="text-3xl md:text-4xl font-bold tracking-wide drop-shadow-lg">
-              {decodedName}
-            </h1>
+            <h1 className="text-3xl md:text-4xl font-bold tracking-wide drop-shadow-lg">{decodedName}</h1>
             <div className="text-white/70 text-sm">
-              レビュー（最新順）
-              {summary?.reviewCount ? ` · ${summary.reviewCount}件` : ""}
+              レビュー（最新順）{summary?.reviewCount ? ` · ${summary.reviewCount}件` : ""}
             </div>
           </div>
-
-          <Link
-            href="/"
-            className="inline-flex items-center bg-white text-black rounded-lg px-4 py-2 font-medium shadow hover:bg-gray-100 transition"
-          >
+          <Link href="/" className="inline-flex items-center bg-white text-black rounded-lg px-4 py-2 font-medium shadow hover:bg-gray-100 transition">
             一覧へ戻る
           </Link>
         </header>
 
+        {/* 総合評価セクション */}
         <section className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5 md:p-6 space-y-5 shadow-xl">
           {loading ? (
             <div className="text-sm text-white/80">読み込み中...</div>
           ) : summary ? (
             <>
-              {summary.heroUrls.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {summary.heroUrls.map((url, idx) => (
-                    <div
-                      key={idx}
-                      className="rounded-2xl overflow-hidden border border-white/20 bg-white/5"
-                    >
-                      <img
-                        src={url}
-                        alt={`${decodedName}-hero-${idx}`}
-                        className="w-full aspect-[16/10] object-cover"
-                      />
+              {/* ヒーロー画像 */}
+              {heroImages.length > 0 ? (
+                <div className={`grid gap-3 ${heroImages.length === 1 ? "grid-cols-1" : "grid-cols-1 md:grid-cols-3"}`}>
+                  {heroImages.map((url, idx) => (
+                    <div key={idx} className="rounded-2xl overflow-hidden border border-white/20 bg-white/5">
+                      <img src={url} alt={`${decodedName}-hero-${idx}`} className="w-full aspect-[16/10] object-cover" />
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="rounded-2xl border border-white/20 bg-white/5 p-10 text-white/70 text-sm">
+                <div className="rounded-2xl border border-white/20 bg-white/5 p-10 text-white/70 text-sm text-center">
                   写真はまだありません
                 </div>
               )}
@@ -241,9 +231,7 @@ export default function BottleDetailPage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="text-white/70 text-sm">統合評価</div>
                 <div className="text-right">
-                  <div className="text-2xl font-semibold">
-                    ★ {summary.avgRating.toFixed(1)}
-                  </div>
+                  <div className="text-2xl font-semibold">★ {summary.avgRating.toFixed(1)}</div>
                   <div className="text-white/70 text-sm">{summary.reviewCount}件</div>
                 </div>
               </div>
@@ -253,49 +241,64 @@ export default function BottleDetailPage() {
                   <span className="text-sm text-white/60">味わい未登録</span>
                 ) : (
                   summary.topTastes.map((t) => (
-                    <span
-                      key={t.label}
-                      className="text-xs rounded-full px-3 py-1 border border-white/20 bg-white/5"
-                      title={`${t.count}件`}
-                    >
-                      #{t.label}
-                      <span className="text-white/60"> · {t.count}</span>
+                    <span key={t.label} className="text-xs rounded-full px-3 py-1 border border-white/20 bg-white/5" title={`${t.count}件`}>
+                      #{t.label}<span className="text-white/60"> · {t.count}</span>
                     </span>
                   ))
                 )}
               </div>
 
               <div className="text-xs text-white/60">
-                最終レビュー：
-                {summary.latestAt
-                  ? new Date(summary.latestAt).toLocaleString("ja-JP")
-                  : "—"}
+                最終レビュー：{summary.latestAt ? new Date(summary.latestAt).toLocaleString("ja-JP") : "—"}
               </div>
             </>
           ) : (
-            <div className="text-sm text-white/80">
-              この銘柄のレビューが見つかりませんでした。
-            </div>
+            <div className="text-sm text-white/80">この銘柄のレビューが見つかりませんでした。</div>
           )}
         </section>
 
-        {/* 銘柄情報（Amazon/楽天リンク・サマリ） */}
+        {/* 銘柄情報（Amazon/楽天リンク・サマリ・固定画像） */}
         {!infoLoading && (
           <section className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5 md:p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold">銘柄情報</h2>
               {!editing && (
-                <button
-                  onClick={startEdit}
-                  className="text-xs px-3 py-1 rounded-lg border border-white/30 hover:bg-white/10 transition"
-                >
+                <button onClick={startEdit} className="text-xs px-3 py-1 rounded-lg border border-white/30 hover:bg-white/10 transition">
                   編集
                 </button>
               )}
             </div>
 
             {editing ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
+
+                {/* 固定ヒーロー画像 */}
+                <div>
+                  <label className="text-xs text-white/60 mb-2 block">固定画像（総合評価欄に表示）</label>
+                  {draft.hero_image_url && (
+                    <div className="relative mb-2 inline-block">
+                      <img src={toPreviewUrl(draft.hero_image_url)} alt="hero preview" className="h-32 rounded-xl border border-white/20 object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setDraft((d) => ({ ...d, hero_image_url: "" }))}
+                        className="absolute -top-1 -right-1 bg-black/70 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center hover:bg-red-600 transition"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                  <label className={`inline-flex items-center gap-2 px-4 py-2 border border-white/30 rounded-lg text-sm cursor-pointer hover:bg-white/10 transition ${uploadingHero ? "opacity-50 pointer-events-none" : ""}`}>
+                    {uploadingHero ? (
+                      <><span className="animate-spin inline-block">⟳</span> アップロード中...</>
+                    ) : (
+                      <>{draft.hero_image_url ? "画像を変更" : "＋ 画像を選択"}</>
+                    )}
+                    <input type="file" accept="image/*" className="hidden" disabled={uploadingHero} onChange={(e) => handleHeroUpload(e.target.files)} />
+                  </label>
+                  {uploadError && <p className="text-xs text-red-400 mt-1">{uploadError}</p>}
+                </div>
+
+                {/* 紹介サマリ */}
                 <div>
                   <label className="text-xs text-white/60 mb-1 block">紹介サマリ</label>
                   <textarea
@@ -306,6 +309,8 @@ export default function BottleDetailPage() {
                     onChange={(e) => setDraft((d) => ({ ...d, summary: e.target.value }))}
                   />
                 </div>
+
+                {/* Amazon */}
                 <div>
                   <label className="text-xs text-white/60 mb-1 block">Amazon リンク</label>
                   <input
@@ -316,6 +321,8 @@ export default function BottleDetailPage() {
                     onChange={(e) => setDraft((d) => ({ ...d, amazon_url: e.target.value }))}
                   />
                 </div>
+
+                {/* 楽天 */}
                 <div>
                   <label className="text-xs text-white/60 mb-1 block">楽天市場 リンク</label>
                   <input
@@ -326,19 +333,12 @@ export default function BottleDetailPage() {
                     onChange={(e) => setDraft((d) => ({ ...d, rakuten_url: e.target.value }))}
                   />
                 </div>
+
                 <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={saveInfo}
-                    disabled={saving}
-                    className="px-4 py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-gray-100 transition disabled:opacity-50"
-                  >
+                  <button onClick={saveInfo} disabled={saving || uploadingHero} className="px-4 py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-gray-100 transition disabled:opacity-50">
                     {saving ? "保存中..." : "保存"}
                   </button>
-                  <button
-                    onClick={() => setEditing(false)}
-                    disabled={saving}
-                    className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-sm hover:bg-white/20 transition"
-                  >
+                  <button onClick={() => setEditing(false)} disabled={saving} className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-sm hover:bg-white/20 transition">
                     キャンセル
                   </button>
                 </div>
@@ -353,28 +353,18 @@ export default function BottleDetailPage() {
                 {(info.amazon_url || info.rakuten_url) && (
                   <div className="flex flex-wrap gap-2 pt-1">
                     {info.amazon_url && (
-                      <a
-                        href={info.amazon_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF9900] text-black rounded-lg text-sm font-semibold hover:bg-[#e68a00] transition"
-                      >
+                      <a href={info.amazon_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF9900] text-black rounded-lg text-sm font-semibold hover:bg-[#e68a00] transition">
                         Amazon で見る
                       </a>
                     )}
                     {info.rakuten_url && (
-                      <a
-                        href={info.rakuten_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#BF0000] text-white rounded-lg text-sm font-semibold hover:bg-[#a00000] transition"
-                      >
+                      <a href={info.rakuten_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#BF0000] text-white rounded-lg text-sm font-semibold hover:bg-[#a00000] transition">
                         楽天市場で見る
                       </a>
                     )}
                   </div>
                 )}
-                {!info.summary && !info.amazon_url && !info.rakuten_url && (
+                {!info.summary && !info.amazon_url && !info.rakuten_url && !info.hero_image_url && (
                   <p className="text-xs text-white/40">「編集」から情報を追加できます</p>
                 )}
               </div>
@@ -382,88 +372,47 @@ export default function BottleDetailPage() {
           </section>
         )}
 
+        {/* レビュー一覧 */}
         <section className="space-y-4">
           <h2 className="text-lg font-semibold drop-shadow">レビュー一覧</h2>
-
           {loading ? (
-            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 text-white/80">
-              読み込み中...
-            </div>
+            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 text-white/80">読み込み中...</div>
           ) : reviews.length === 0 ? (
             <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 text-white/80">
               まだレビューがありません。
-              <div className="mt-3">
-                <Link href="/register" className="underline">
-                  ＋ お酒を登録
-                </Link>
-              </div>
+              <div className="mt-3"><Link href="/register" className="underline">＋ お酒を登録</Link></div>
             </div>
           ) : (
             reviews.map((r) => (
-              <div
-                key={r.id}
-                className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5 space-y-3 shadow-xl"
-              >
+              <div key={r.id} className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5 space-y-3 shadow-xl">
                 <div className="flex items-start justify-between gap-4">
-                  <div className="text-sm text-white/70">
-                    {r.created_at
-                      ? new Date(r.created_at).toLocaleString("ja-JP")
-                      : "—"}
-                  </div>
+                  <div className="text-sm text-white/70">{r.created_at ? new Date(r.created_at).toLocaleString("ja-JP") : "—"}</div>
                   <div className="text-sm">
-                    {"★".repeat(r.rating)}
-                    <span className="text-white/30">
-                      {"★".repeat(Math.max(0, 5 - r.rating))}
-                    </span>
+                    {"★".repeat(r.rating)}<span className="text-white/30">{"★".repeat(Math.max(0, 5 - r.rating))}</span>
                   </div>
                 </div>
-
                 {(r.tastes?.length > 0 || r.scenes?.length > 0) && (
                   <div className="flex flex-wrap gap-2">
-                    {r.tastes?.map((t) => (
-                      <span
-                        key={`t-${r.id}-${t}`}
-                        className="text-xs rounded-full px-3 py-1 border border-white/20 bg-white/5"
-                      >
-                        #{t}
-                      </span>
-                    ))}
-                    {r.scenes?.map((s) => (
-                      <span
-                        key={`s-${r.id}-${s}`}
-                        className="text-xs rounded-full px-3 py-1 border border-white/20 bg-white/5"
-                      >
-                        #{s}
-                      </span>
-                    ))}
+                    {r.tastes?.map((t) => <span key={`t-${r.id}-${t}`} className="text-xs rounded-full px-3 py-1 border border-white/20 bg-white/5">#{t}</span>)}
+                    {r.scenes?.map((s) => <span key={`s-${r.id}-${s}`} className="text-xs rounded-full px-3 py-1 border border-white/20 bg-white/5">#{s}</span>)}
                   </div>
                 )}
-
                 {Array.isArray(r.images) && r.images.length > 0 && (
                   <div className="flex gap-2 flex-wrap">
                     {r.images.slice(0, 3).map((src, idx) => (
                       <Link key={idx} href={`/alcohol/${encodeURIComponent(r.id)}`}>
-                        <img
-                          src={toThumbUrl(src)}
-                          alt={`thumb-${idx}`}
-                          className="h-20 w-20 object-cover rounded-xl border border-white/20 hover:opacity-90"
-                        />
+                        <img src={toThumbUrl(src)} alt={`thumb-${idx}`} className="h-20 w-20 object-cover rounded-xl border border-white/20 hover:opacity-90" />
                       </Link>
                     ))}
                   </div>
                 )}
-
                 {r.memo?.trim() ? (
                   <p className="text-sm text-white/85 whitespace-pre-wrap">{r.memo}</p>
                 ) : (
                   <p className="text-sm text-white/50">（メモなし）</p>
                 )}
-
                 <div>
-                  <Link
-                    href={`/alcohol/${encodeURIComponent(r.id)}`}
-                    className="text-sm underline text-white/80"
-                  >
+                  <Link href={`/alcohol/${encodeURIComponent(r.id)}`} className="text-sm underline text-white/80">
                     このレビューの詳細を見る
                   </Link>
                 </div>
@@ -473,22 +422,12 @@ export default function BottleDetailPage() {
         </section>
 
         <div className="flex gap-3">
-          <Link
-            href={`/register?name=${encodeURIComponent(decodedName)}`}
-            className="w-1/2 bg-white text-black rounded-lg px-4 py-3 text-center font-medium shadow hover:bg-gray-100 transition"
-          >
+          <Link href={`/register?name=${encodeURIComponent(decodedName)}`} className="w-1/2 bg-white text-black rounded-lg px-4 py-3 text-center font-medium shadow hover:bg-gray-100 transition">
             追加で登録
           </Link>
-          <Link
-            href="/"
-            className="w-1/2 bg-black/60 border border-white/20 rounded-lg px-4 py-3 text-center font-medium hover:bg-black/70 transition"
-          >
+          <Link href="/" className="w-1/2 bg-black/60 border border-white/20 rounded-lg px-4 py-3 text-center font-medium hover:bg-black/70 transition">
             一覧へ
           </Link>
-        </div>
-
-        <div className="text-xs text-white/40 pt-2">
-          background photo: public/bottle-bg.jpg
         </div>
       </div>
     </div>
