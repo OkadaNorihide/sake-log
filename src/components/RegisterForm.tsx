@@ -67,6 +67,11 @@ export default function RegisterForm({ defaultName = "" }: Props) {
   const [bottleNames, setBottleNames] = useState<string[]>([]);
   const [createdId, setCreatedId] = useState("");
 
+  // ラベルスキャン
+  const [scanState, setScanState] = useState<"idle" | "scanning" | "done" | "error">("idle");
+  const [scanCandidates, setScanCandidates] = useState<string[]>([]);
+  const [scanError, setScanError] = useState("");
+
   // 既存銘柄名を取得（予測変換用）
   useEffect(() => {
     fetch("/api/bottles", { cache: "no-store" })
@@ -79,6 +84,25 @@ export default function RegisterForm({ defaultName = "" }: Props) {
     () => name.trim().length > 0 && rating > 0 && !isUploading,
     [name, rating, isUploading]
   );
+
+  const handleLabelScan = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setScanState("scanning");
+    setScanCandidates([]);
+    setScanError("");
+    try {
+      const formData = new FormData();
+      formData.append("image", files[0]);
+      const res = await fetch("/api/label-scan", { method: "POST", body: formData });
+      const json = await res.json();
+      const candidates: string[] = Array.isArray(json.candidates) ? json.candidates : [];
+      setScanCandidates(candidates);
+      setScanState("done");
+    } catch (e: unknown) {
+      setScanError("スキャンに失敗しました。手入力してください。");
+      setScanState("error");
+    }
+  };
 
   const toggle = (value: string, list: string[], setList: (v: string[]) => void) => {
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
@@ -221,6 +245,46 @@ export default function RegisterForm({ defaultName = "" }: Props) {
         )}
         {defaultName && (
           <p className="text-xs text-white/50">銘柄ページから引き継がれています</p>
+        )}
+
+        {/* ラベルスキャン（defaultNameがない場合のみ表示） */}
+        {!defaultName && (
+          <div className="space-y-2">
+            <label className={`inline-flex items-center gap-2 px-3 py-1.5 border border-white/25 rounded-lg text-xs cursor-pointer hover:bg-white/10 transition ${scanState === "scanning" ? "opacity-50 pointer-events-none" : ""}`}>
+              {scanState === "scanning" ? (
+                <><span className="animate-spin inline-block">⟳</span> スキャン中...</>
+              ) : (
+                <>📷 ラベル写真から銘柄を探す</>
+              )}
+              <input type="file" accept="image/*" className="hidden" disabled={scanState === "scanning"} onChange={(e) => handleLabelScan(e.target.files)} />
+            </label>
+
+            {scanState === "done" && scanCandidates.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs text-white/50">候補を選んでください（タップで反映）</p>
+                <div className="flex flex-wrap gap-2">
+                  {scanCandidates.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => { setName(c); setScanCandidates([]); setScanState("idle"); }}
+                      className="px-3 py-1 border border-white/30 rounded-full text-sm hover:bg-white/20 transition"
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {scanState === "done" && scanCandidates.length === 0 && (
+              <p className="text-xs text-white/50">候補が見つかりませんでした。手入力してください。</p>
+            )}
+
+            {scanState === "error" && (
+              <p className="text-xs text-red-400">{scanError}</p>
+            )}
+          </div>
         )}
       </div>
 
