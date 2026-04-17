@@ -231,7 +231,7 @@ export default function RegisterForm({ defaultName = "" }: Props) {
         <input
           list="bottle-names-list"
           className="w-full bg-white/10 border border-white/20 text-white placeholder-white/40 p-3 rounded-lg outline-none focus:ring-2 focus:ring-white/30"
-          placeholder="例：獺祭、久保田、..."
+          placeholder="例：山崎、白州、..."
           value={name}
           onChange={(e) => setName(e.target.value)}
           readOnly={!!defaultName}

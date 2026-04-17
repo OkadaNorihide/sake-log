@@ -3,7 +3,7 @@
  * GOOGLE_VISION_API_KEY が未設定の場合はモックテキストを返す
  */
 
-const MOCK_TEXT = "獺祭 純米大吟醸 磨き二割三分 旭酒造";
+const MOCK_TEXT = "山崎 12年 シングルモルト サントリー";
 
 export async function extractTextFromImage(imageBase64: string): Promise<string> {
   const apiKey = process.env.GOOGLE_VISION_API_KEY;

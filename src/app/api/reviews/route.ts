@@ -73,6 +73,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // bottle_master に銘柄名を自動登録（category は後から別途設定）
+    await supabaseAdmin
+      .from("bottle_master")
+      .upsert({ name }, { onConflict: "name", ignoreDuplicates: true });
+
     return NextResponse.json({ item: data as ReviewRow });
   } catch {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
