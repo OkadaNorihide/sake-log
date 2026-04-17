@@ -147,8 +147,9 @@ export default function BottleDetailPage() {
         hero_image_url: json.item.hero_image_url ?? "",
       });
       setEditing(false);
-    } catch {
-      alert("保存に失敗しました");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`保存に失敗しました:\n${msg}`);
     } finally {
       setSaving(false);
     }
