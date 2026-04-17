@@ -9,6 +9,7 @@ type ReviewRow = {
   scenes: string[];
   memo: string;
   images: string[];
+  category: string;
   created_at: string;
   likes_count: number;
 };
@@ -26,7 +27,7 @@ export async function GET(
 
     const { data, error } = await supabaseAdmin
       .from("reviews")
-      .select("id, name, rating, tastes, scenes, memo, images, created_at, likes_count")
+      .select("id, name, rating, tastes, scenes, memo, images, category, created_at, likes_count")
       .eq("id", id)
       .single();
 
@@ -54,6 +55,7 @@ export async function PUT(
       scenes?: string[];
       memo?: string;
       images?: string[];
+      category?: string;
     };
 
     const rating = Number(body.rating ?? 0);
@@ -69,9 +71,10 @@ export async function PUT(
         scenes: Array.isArray(body.scenes) ? body.scenes : [],
         memo: (body.memo ?? "").trim(),
         images: Array.isArray(body.images) ? body.images : [],
+        category: (body.category ?? "不明").trim(),
       })
       .eq("id", id)
-      .select("id, name, rating, tastes, scenes, memo, images, created_at, likes_count")
+      .select("id, name, rating, tastes, scenes, memo, images, category, created_at, likes_count")
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

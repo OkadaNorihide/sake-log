@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 
 const TASTES = ["フルーティー", "甘い", "スモーキー", "軽い", "コク", "スパイシー"];
 const SCENES = ["家飲み", "バー", "居酒屋", "贈答", "特別な日"];
+const CATEGORIES = ["ジャパニーズ", "スコッチ", "バーボン", "アイリッシュ", "ブレンデッド", "その他", "不明"];
 
 type Review = {
   id: string;
@@ -15,6 +16,7 @@ type Review = {
   scenes: string[];
   memo: string;
   images?: string[];
+  category: string;
   created_at: string;
   likes_count?: number;
 };
@@ -72,6 +74,7 @@ export default function ReviewDetailPage() {
 
   // 編集用ドラフト
   const [draftRating, setDraftRating] = useState(0);
+  const [draftCategory, setDraftCategory] = useState("不明");
   const [draftTastes, setDraftTastes] = useState<string[]>([]);
   const [draftScenes, setDraftScenes] = useState<string[]>([]);
   const [draftMemo, setDraftMemo] = useState("");
@@ -93,6 +96,7 @@ export default function ReviewDetailPage() {
   const startEdit = () => {
     if (!review) return;
     setDraftRating(review.rating);
+    setDraftCategory(review.category ?? "不明");
     setDraftTastes([...(review.tastes ?? [])]);
     setDraftScenes([...(review.scenes ?? [])]);
     setDraftMemo(review.memo ?? "");
@@ -129,6 +133,7 @@ export default function ReviewDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           rating: draftRating,
+          category: draftCategory,
           tastes: draftTastes,
           scenes: draftScenes,
           memo: draftMemo.trim(),
@@ -181,6 +186,19 @@ export default function ReviewDetailPage() {
               <div className="flex gap-1 text-3xl">
                 {[1, 2, 3, 4, 5].map((i) => (
                   <button key={i} type="button" onClick={() => setDraftRating(i)} className={i <= draftRating ? "text-yellow-400" : "text-white/20"}>★</button>
+                ))}
+              </div>
+            </div>
+
+            {/* カテゴリ */}
+            <div className="space-y-2">
+              <label className="text-xs text-white/60">カテゴリ</label>
+              <div className="flex flex-wrap gap-2">
+                {CATEGORIES.map((c) => (
+                  <button key={c} type="button" onClick={() => setDraftCategory(c)}
+                    className={`px-3 py-1 border rounded-full text-sm transition ${draftCategory === c ? "bg-amber-400 text-black border-amber-400" : "border-white/30 hover:bg-white/10"}`}>
+                    {c}
+                  </button>
                 ))}
               </div>
             </div>
@@ -263,9 +281,16 @@ export default function ReviewDetailPage() {
           <>
             <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md p-6 space-y-4 shadow-xl">
               <div className="flex items-start justify-between gap-4">
-                <div>
+                <div className="space-y-1">
                   <div className="text-2xl font-bold">{review.name}</div>
-                  <div className="text-xs text-white/70">登録日時：{new Date(review.created_at).toLocaleString("ja-JP")}</div>
+                  <div className="flex items-center gap-2">
+                    {review.category && review.category !== "不明" && (
+                      <span className="text-xs bg-amber-400/20 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-full">
+                        {review.category}
+                      </span>
+                    )}
+                    <div className="text-xs text-white/70">登録日時：{new Date(review.created_at).toLocaleString("ja-JP")}</div>
+                  </div>
                 </div>
                 <div className="text-lg text-white">
                   {"★".repeat(review.rating)}<span className="text-white/30">{"★".repeat(Math.max(0, 5 - review.rating))}</span>
