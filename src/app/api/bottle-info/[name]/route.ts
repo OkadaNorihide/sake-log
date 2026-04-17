@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 type BottleInfoRow = {
   name: string;
   summary: string;
+  official_url: string;
   amazon_url: string;
   rakuten_url: string;
   hero_image_url: string;
@@ -19,7 +20,7 @@ export async function GET(
 
   const { data, error } = await supabaseAdmin
     .from("bottle_info")
-    .select("name, summary, amazon_url, rakuten_url, hero_image_url, updated_at")
+    .select("name, summary, official_url, amazon_url, rakuten_url, hero_image_url, updated_at")
     .eq("name", decodedName)
     .maybeSingle();
 
@@ -39,6 +40,7 @@ export async function PUT(
 
   const body = (await req.json()) as {
     summary?: string;
+    official_url?: string;
     amazon_url?: string;
     rakuten_url?: string;
     hero_image_url?: string;
@@ -50,6 +52,7 @@ export async function PUT(
       {
         name: decodedName,
         summary: (body.summary ?? "").trim(),
+        official_url: (body.official_url ?? "").trim(),
         amazon_url: (body.amazon_url ?? "").trim(),
         rakuten_url: (body.rakuten_url ?? "").trim(),
         hero_image_url: (body.hero_image_url ?? "").trim(),
@@ -57,7 +60,7 @@ export async function PUT(
       },
       { onConflict: "name" }
     )
-    .select("name, summary, amazon_url, rakuten_url, hero_image_url, updated_at")
+    .select("name, summary, official_url, amazon_url, rakuten_url, hero_image_url, updated_at")
     .single();
 
   if (error) {

@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 
 type BottleInfo = {
   summary: string;
+  official_url: string;
   amazon_url: string;
   rakuten_url: string;
   hero_image_url: string;
@@ -72,7 +73,7 @@ async function uploadHeroImage(file: File): Promise<string> {
   return json.secure_url as string;
 }
 
-const EMPTY_INFO: BottleInfo = { summary: "", amazon_url: "", rakuten_url: "", hero_image_url: "" };
+const EMPTY_INFO: BottleInfo = { summary: "", official_url: "", amazon_url: "", rakuten_url: "", hero_image_url: "" };
 
 export default function BottleDetailPage() {
   const params = useParams<{ name: string }>();
@@ -105,6 +106,7 @@ export default function BottleDetailPage() {
       .then((j) => {
         if (j.item) setInfo({
           summary: j.item.summary ?? "",
+          official_url: j.item.official_url ?? "",
           amazon_url: j.item.amazon_url ?? "",
           rakuten_url: j.item.rakuten_url ?? "",
           hero_image_url: j.item.hero_image_url ?? "",
@@ -142,6 +144,7 @@ export default function BottleDetailPage() {
       if (!res.ok) throw new Error(json.error || "failed");
       setInfo({
         summary: json.item.summary ?? "",
+        official_url: json.item.official_url ?? "",
         amazon_url: json.item.amazon_url ?? "",
         rakuten_url: json.item.rakuten_url ?? "",
         hero_image_url: json.item.hero_image_url ?? "",
@@ -299,6 +302,18 @@ export default function BottleDetailPage() {
                   {uploadError && <p className="text-xs text-red-400 mt-1">{uploadError}</p>}
                 </div>
 
+                {/* 公式サイト */}
+                <div>
+                  <label className="text-xs text-white/60 mb-1 block">公式サイト URL</label>
+                  <input
+                    type="url"
+                    className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-sm text-white placeholder-white/40 outline-none focus:ring-2 focus:ring-white/30"
+                    placeholder="https://..."
+                    value={draft.official_url}
+                    onChange={(e) => setDraft((d) => ({ ...d, official_url: e.target.value }))}
+                  />
+                </div>
+
                 {/* 紹介サマリ */}
                 <div>
                   <label className="text-xs text-white/60 mb-1 block">紹介サマリ</label>
@@ -351,8 +366,13 @@ export default function BottleDetailPage() {
                 ) : (
                   <p className="text-sm text-white/40">紹介文が未登録です</p>
                 )}
-                {(info.amazon_url || info.rakuten_url) && (
+                {(info.official_url || info.amazon_url || info.rakuten_url) && (
                   <div className="flex flex-wrap gap-2 pt-1">
+                    {info.official_url && (
+                      <a href={info.official_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-4 py-2 bg-white/20 border border-white/30 text-white rounded-lg text-sm font-semibold hover:bg-white/30 transition">
+                        🌐 公式サイト
+                      </a>
+                    )}
                     {info.amazon_url && (
                       <a href={info.amazon_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF9900] text-black rounded-lg text-sm font-semibold hover:bg-[#e68a00] transition">
                         Amazon で見る
