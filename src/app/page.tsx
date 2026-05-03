@@ -202,6 +202,11 @@ export default function HomePage() {
     return arr;
   }, [filtered, sortKey]);
 
+  const [visibleCount, setVisibleCount] = useState(50);
+
+  // 検索・フィルター変更時に表示数リセット
+  useEffect(() => { setVisibleCount(50); }, [q, filterCategory, filterRating, filterTaste, filterScene]);
+
   const hasFilter = filterCategory !== null || filterRating !== null || filterTaste !== null || filterScene !== null;
 
   return (
@@ -408,63 +413,76 @@ export default function HomePage() {
             {hasFilter ? "条件に合う銘柄が見つかりませんでした。" : "まだ登録がありません。"}
           </div>
         ) : (
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {sorted.map((s) => (
-              <Link
-                key={s.name}
-                href={`/bottle/${encodeURIComponent(s.name)}`}
-                className="bg-white/10 backdrop-blur-md rounded-2xl p-6 space-y-4 hover:bg-white/20 transition block"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    {s.thumbUrl ? (
-                      <img src={s.thumbUrl} alt={s.name} className="h-16 w-16 object-cover rounded-lg border border-white/20" />
-                    ) : (
-                      <div className="h-16 w-16 rounded-lg bg-white/10 flex items-center justify-center text-xs text-gray-300">no photo</div>
-                    )}
-                    <div className="space-y-1">
-                      <div className="text-lg font-semibold">{s.name}</div>
-                      {s.category && (
-                        <span className="text-xs bg-amber-400/20 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-full">
-                          {s.category}
-                        </span>
+          <>
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {sorted.slice(0, visibleCount).map((s) => (
+                <Link
+                  key={s.name}
+                  href={`/bottle/${encodeURIComponent(s.name)}`}
+                  className="bg-white/10 backdrop-blur-md rounded-2xl p-6 space-y-4 hover:bg-white/20 transition block"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      {s.thumbUrl ? (
+                        <img src={s.thumbUrl} alt={s.name} className="h-16 w-16 object-cover rounded-lg border border-white/20" />
+                      ) : (
+                        <div className="h-16 w-16 rounded-lg bg-white/10 flex items-center justify-center text-xs text-gray-300">no photo</div>
+                      )}
+                      <div className="space-y-1">
+                        <div className="text-lg font-semibold">{s.name}</div>
+                        {s.category && (
+                          <span className="text-xs bg-amber-400/20 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-full">
+                            {s.category}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right text-sm shrink-0">
+                      {s.hasReviews ? (
+                        <>
+                          ★ {s.avgRating.toFixed(1)}
+                          <div className="text-xs text-gray-300">{s.reviewCount}件</div>
+                        </>
+                      ) : (
+                        <div className="text-xs text-white/40">レビューなし</div>
                       )}
                     </div>
                   </div>
-                  <div className="text-right text-sm shrink-0">
-                    {s.hasReviews ? (
-                      <>
-                        ★ {s.avgRating.toFixed(1)}
-                        <div className="text-xs text-gray-300">{s.reviewCount}件</div>
-                      </>
-                    ) : (
-                      <div className="text-xs text-white/40">レビューなし</div>
-                    )}
-                  </div>
-                </div>
 
-                {s.topTastes.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {s.topTastes.map((t) => (
-                      <span key={t.label} className="text-xs bg-white/20 px-2 py-1 rounded-full">
-                        #{t.label} · {t.count}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                  {s.topTastes.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {s.topTastes.map((t) => (
+                        <span key={t.label} className="text-xs bg-white/20 px-2 py-1 rounded-full">
+                          #{t.label} · {t.count}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
-                {!s.hasReviews && s.summary && (
-                  <p className="text-xs text-white/60 line-clamp-2">{s.summary}</p>
-                )}
+                  {!s.hasReviews && s.summary && (
+                    <p className="text-xs text-white/60 line-clamp-2">{s.summary}</p>
+                  )}
 
-                {s.hasReviews && (
-                  <div className="text-xs text-gray-300">
-                    最終レビュー：{new Date(s.latestAt).toLocaleString("ja-JP")}
-                  </div>
-                )}
-              </Link>
-            ))}
-          </section>
+                  {s.hasReviews && (
+                    <div className="text-xs text-gray-300">
+                      最終レビュー：{new Date(s.latestAt).toLocaleString("ja-JP")}
+                    </div>
+                  )}
+                </Link>
+              ))}
+            </section>
+
+            {visibleCount < sorted.length && (
+              <div className="text-center pt-2">
+                <button
+                  onClick={() => setVisibleCount((n) => n + 50)}
+                  className="px-8 py-3 bg-white/10 border border-white/20 rounded-full text-sm hover:bg-white/20 transition"
+                >
+                  もっと見る（残り {sorted.length - visibleCount} 件）
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
