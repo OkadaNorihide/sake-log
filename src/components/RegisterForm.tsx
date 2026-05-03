@@ -261,6 +261,9 @@ export default function RegisterForm({ defaultName = "" }: Props) {
             {bottleNames.map((n) => (
               <option key={n} value={n} />
             ))}
+            {[...aliasMap.entries()].map(([alias, canonical]) => (
+              <option key={`alias-${alias}`} value={alias} label={canonical} />
+            ))}
           </datalist>
         )}
         {defaultName && (
