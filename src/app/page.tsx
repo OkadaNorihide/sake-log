@@ -351,6 +351,44 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* 最近の投稿（横スクロール） */}
+        {!loading && reviews.length > 0 && (
+          <section className="space-y-3">
+            <div className="flex items-center gap-3">
+              <h2 className="text-base font-semibold tracking-wide">最近の投稿</h2>
+              <div className="flex-1 h-px bg-white/20" />
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
+              {[...reviews]
+                .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+                .slice(0, 15)
+                .map((r) => {
+                  const thumb = r.images?.[0]
+                    ? toThumbUrl(r.images[0])
+                    : undefined;
+                  return (
+                    <Link
+                      key={r.id}
+                      href={`/alcohol/${encodeURIComponent(r.id)}`}
+                      className="shrink-0 w-36 bg-white/10 backdrop-blur-md border border-white/15 rounded-xl overflow-hidden hover:bg-white/20 transition"
+                    >
+                      {thumb ? (
+                        <img src={thumb} alt={r.name} className="w-full h-28 object-cover" />
+                      ) : (
+                        <div className="w-full h-28 bg-white/5 flex items-center justify-center text-xs text-white/30">no photo</div>
+                      )}
+                      <div className="p-2 space-y-1">
+                        <div className="text-xs font-medium line-clamp-1">{r.name}</div>
+                        <div className="text-xs text-amber-300">{"★".repeat(r.rating)}<span className="text-white/20">{"★".repeat(Math.max(0, 5 - r.rating))}</span></div>
+                        <div className="text-[10px] text-white/40">{new Date(r.created_at).toLocaleDateString("ja-JP", { month: "short", day: "numeric" })}</div>
+                      </div>
+                    </Link>
+                  );
+                })}
+            </div>
+          </section>
+        )}
+
         {/* セクション見出し */}
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold tracking-wide">
