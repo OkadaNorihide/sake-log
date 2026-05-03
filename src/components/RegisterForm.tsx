@@ -249,10 +249,11 @@ export default function RegisterForm({ defaultName = "" }: Props) {
           className="w-full bg-white/10 border border-white/20 text-white placeholder-white/40 p-3 rounded-lg outline-none focus:ring-2 focus:ring-white/30"
           placeholder="例：山崎、白州、..."
           value={name}
-          onChange={(e) => {
-            const v = e.target.value;
-            // エイリアス（yomi/romaji/name_en）が入力されたら正規名に変換
-            setName(aliasMap.get(v) ?? v);
+          onChange={(e) => setName(e.target.value)}
+          onBlur={(e) => {
+            // 離脱時にエイリアス（romaji/yomi/name_en）を正規名に変換
+            const canonical = aliasMap.get(e.target.value);
+            if (canonical) setName(canonical);
           }}
           readOnly={!!defaultName}
         />
