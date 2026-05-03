@@ -202,16 +202,16 @@ export default function HomePage() {
     return arr;
   }, [filtered, sortKey]);
 
-  const [visibleCount, setVisibleCount] = useState(50);
+  const [visibleCount, setVisibleCount] = useState(25);
 
   // 検索・フィルター変更時に表示数リセット
-  useEffect(() => { setVisibleCount(50); }, [q, filterCategory, filterRating, filterTaste, filterScene]);
+  useEffect(() => { setVisibleCount(25); }, [q, filterCategory, filterRating, filterTaste, filterScene]);
 
   const hasFilter = filterCategory !== null || filterRating !== null || filterTaste !== null || filterScene !== null;
 
   return (
     <div className="relative min-h-screen text-white">
-      <div className="absolute inset-0 bg-contain bg-top bg-no-repeat opacity-45" style={{ backgroundImage: "url('/bar-bg.jpg')" }} />
+      <div className="absolute inset-0 bg-repeat-y opacity-45" style={{ backgroundImage: "url('/bar-bg.jpg')", backgroundSize: "100% auto" }} />
       <div className="absolute inset-0 bg-black/40" />
 
       <div className="relative z-10 p-6 max-w-5xl mx-auto space-y-8">
@@ -475,7 +475,7 @@ export default function HomePage() {
             {visibleCount < sorted.length && (
               <div className="text-center pt-2">
                 <button
-                  onClick={() => setVisibleCount((n) => n + 50)}
+                  onClick={() => setVisibleCount((n) => n + 25)}
                   className="px-8 py-3 bg-white/10 border border-white/20 rounded-full text-sm hover:bg-white/20 transition"
                 >
                   もっと見る（残り {sorted.length - visibleCount} 件）
