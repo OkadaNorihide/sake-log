@@ -119,6 +119,8 @@ type SortKey = "reviewCount" | "avgRating" | "latest";
 export default function HomePage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [bottleInfos, setBottleInfos] = useState<BottleInfoItem[]>([]);
+  // alias → canonical name (romaji/yomi/name_en → 正規銘柄名)
+  const [aliasMap, setAliasMap] = useState<Map<string, string>>(new Map());
   const [q, setQ] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("reviewCount");
   const [loading, setLoading] = useState(true);
@@ -134,14 +136,22 @@ export default function HomePage() {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [reviewsRes, infosRes] = await Promise.all([
+        const [reviewsRes, infosRes, bottlesRes] = await Promise.all([
           fetch("/api/reviews", { cache: "no-store" }),
           fetch("/api/bottle-infos", { cache: "no-store" }),
+          fetch("/api/bottles", { cache: "no-store" }),
         ]);
         const reviewsJson = await reviewsRes.json();
         const infosJson = await infosRes.json();
+        const bottlesJson = await bottlesRes.json();
         setReviews(Array.isArray(reviewsJson.items) ? reviewsJson.items : []);
         setBottleInfos(Array.isArray(infosJson.items) ? infosJson.items : []);
+        // alias → canonical マップを構築
+        const aMap = new Map<string, string>();
+        for (const { alias, canonical } of (bottlesJson.aliases ?? [])) {
+          if (alias && canonical) aMap.set(normalizeSearch(alias), canonical as string);
+        }
+        setAliasMap(aMap);
       } catch {
         setReviews([]);
         setBottleInfos([]);
@@ -187,7 +197,14 @@ export default function HomePage() {
     let result = summaries;
     if (q.trim()) {
       const nq = normalizeSearch(q);
-      result = result.filter((s) => normalizeSearch(s.name).includes(nq));
+      // エイリアス（romaji/yomi/name_en）にマッチした正規名のセットを作る
+      const aliasHits = new Set<string>();
+      for (const [alias, canonical] of aliasMap) {
+        if (alias.includes(nq)) aliasHits.add(canonical);
+      }
+      result = result.filter((s) =>
+        normalizeSearch(s.name).includes(nq) || aliasHits.has(s.name)
+      );
     }
     if (filterCategory !== null) result = result.filter((s) => s.category === filterCategory);
     if (filterRating !== null) result = result.filter((s) => s.hasReviews && s.avgRating >= filterRating);
