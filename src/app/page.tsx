@@ -211,7 +211,7 @@ export default function HomePage() {
 
   return (
     <div className="relative min-h-screen text-white">
-      <div className="absolute inset-0 bg-cover bg-center opacity-45" style={{ backgroundImage: "url('/bar-bg.jpg')" }} />
+      <div className="absolute inset-0 bg-contain bg-top bg-no-repeat opacity-45" style={{ backgroundImage: "url('/bar-bg.jpg')" }} />
       <div className="absolute inset-0 bg-black/40" />
 
       <div className="relative z-10 p-6 max-w-5xl mx-auto space-y-8">
