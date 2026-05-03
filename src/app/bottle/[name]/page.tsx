@@ -75,6 +75,8 @@ async function uploadHeroImage(file: File): Promise<string> {
 
 const EMPTY_INFO: BottleInfo = { summary: "", official_url: "", amazon_url: "", rakuten_url: "", hero_image_url: "" };
 
+const CATEGORIES = ["ジャパニーズ", "スコッチ", "バーボン", "アイリッシュ", "ブレンデッド", "その他", "不明"];
+
 export default function BottleDetailPage() {
   const params = useParams<{ name: string }>();
   const rawName = typeof params?.name === "string" ? params.name : "";
@@ -91,6 +93,9 @@ export default function BottleDetailPage() {
   const [uploadingHero, setUploadingHero] = useState(false);
   const [uploadError, setUploadError] = useState("");
 
+  const [category, setCategory] = useState("");
+  const [draftCategory, setDraftCategory] = useState("");
+
   useEffect(() => {
     fetch("/api/reviews", { cache: "no-store" })
       .then((r) => r.json())
@@ -101,22 +106,27 @@ export default function BottleDetailPage() {
 
   useEffect(() => {
     if (!decodedName) return;
-    fetch(`/api/bottle-info/${encodeURIComponent(decodedName)}`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => {
-        if (j.item) setInfo({
-          summary: j.item.summary ?? "",
-          official_url: j.item.official_url ?? "",
-          amazon_url: j.item.amazon_url ?? "",
-          rakuten_url: j.item.rakuten_url ?? "",
-          hero_image_url: j.item.hero_image_url ?? "",
+    Promise.all([
+      fetch(`/api/bottle-info/${encodeURIComponent(decodedName)}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/bottle-master/${encodeURIComponent(decodedName)}`, { cache: "no-store" }).then((r) => r.json()),
+    ])
+      .then(([infoJson, masterJson]) => {
+        if (infoJson.item) setInfo({
+          summary: infoJson.item.summary ?? "",
+          official_url: infoJson.item.official_url ?? "",
+          amazon_url: infoJson.item.amazon_url ?? "",
+          rakuten_url: infoJson.item.rakuten_url ?? "",
+          hero_image_url: infoJson.item.hero_image_url ?? "",
         });
+        const cat = masterJson.item?.category ?? "";
+        setCategory(cat);
+        setDraftCategory(cat);
       })
       .catch(() => {})
       .finally(() => setInfoLoading(false));
   }, [decodedName]);
 
-  const startEdit = () => { setDraft({ ...info }); setUploadError(""); setEditing(true); };
+  const startEdit = () => { setDraft({ ...info }); setDraftCategory(category); setUploadError(""); setEditing(true); };
 
   const handleHeroUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -135,20 +145,29 @@ export default function BottleDetailPage() {
   const saveInfo = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/bottle-info/${encodeURIComponent(decodedName)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(draft),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "failed");
+      const [infoRes, masterRes] = await Promise.all([
+        fetch(`/api/bottle-info/${encodeURIComponent(decodedName)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(draft),
+        }),
+        fetch(`/api/bottle-master/${encodeURIComponent(decodedName)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ category: draftCategory }),
+        }),
+      ]);
+      const infoJson = await infoRes.json();
+      if (!infoRes.ok) throw new Error(infoJson.error || "failed");
       setInfo({
-        summary: json.item.summary ?? "",
-        official_url: json.item.official_url ?? "",
-        amazon_url: json.item.amazon_url ?? "",
-        rakuten_url: json.item.rakuten_url ?? "",
-        hero_image_url: json.item.hero_image_url ?? "",
+        summary: infoJson.item.summary ?? "",
+        official_url: infoJson.item.official_url ?? "",
+        amazon_url: infoJson.item.amazon_url ?? "",
+        rakuten_url: infoJson.item.rakuten_url ?? "",
+        hero_image_url: infoJson.item.hero_image_url ?? "",
       });
+      const masterJson = await masterRes.json();
+      if (masterRes.ok && masterJson.item) setCategory(masterJson.item.category ?? "");
       setEditing(false);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -202,8 +221,15 @@ export default function BottleDetailPage() {
         <header className="flex items-start justify-between gap-4">
           <div className="space-y-2">
             <h1 className="text-3xl md:text-4xl font-bold tracking-wide drop-shadow-lg">{decodedName}</h1>
-            <div className="text-white/70 text-sm">
-              レビュー（最新順）{summary?.reviewCount ? ` · ${summary.reviewCount}件` : ""}
+            <div className="flex items-center gap-2 flex-wrap">
+              {category && category !== "不明" && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/30 border border-amber-400/40 text-amber-300 font-medium">
+                  {category}
+                </span>
+              )}
+              <div className="text-white/70 text-sm">
+                レビュー（最新順）{summary?.reviewCount ? ` · ${summary.reviewCount}件` : ""}
+              </div>
             </div>
           </div>
           <Link href="/" className="inline-flex items-center bg-white text-black rounded-lg px-4 py-2 font-medium shadow hover:bg-gray-100 transition">
@@ -275,6 +301,27 @@ export default function BottleDetailPage() {
 
             {editing ? (
               <div className="space-y-4">
+
+                {/* カテゴリ */}
+                <div>
+                  <label className="text-xs text-white/60 mb-2 block">カテゴリ</label>
+                  <div className="flex flex-wrap gap-2">
+                    {CATEGORIES.map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setDraftCategory(cat)}
+                        className={`px-3 py-1 rounded-full text-xs border transition ${
+                          draftCategory === cat
+                            ? "bg-amber-500 border-amber-400 text-white font-semibold"
+                            : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 {/* 固定ヒーロー画像 */}
                 <div>
