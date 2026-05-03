@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { identifyBottleFromImage } from "@/lib/bottleIdentifier";
-import { findCandidates } from "@/lib/productMatcher";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  let rawText = "";
   let candidates: string[] = [];
+  let rawText: string | null = null;
   let errorMsg: string | null = null;
 
   try {
@@ -20,11 +19,17 @@ export async function POST(req: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    // Claude Vision でボトルを識別
-    rawText = await identifyBottleFromImage(buffer);
+    // bottle_master の銘柄名一覧を取得して Claude に渡す
+    const { data: masterData } = await supabaseAdmin
+      .from("bottle_master")
+      .select("name");
 
-    // bottle_master とマッチング
-    candidates = await findCandidates(rawText);
+    const knownBottles: string[] = (masterData ?? [])
+      .map((r) => r.name as string)
+      .filter(Boolean);
+
+    candidates = await identifyBottleFromImage(buffer, knownBottles);
+    rawText = candidates.join(", ") || null;
   } catch (e: unknown) {
     errorMsg = e instanceof Error ? e.message : String(e);
     console.error("[label-scan] error:", errorMsg);
@@ -33,7 +38,7 @@ export async function POST(req: NextRequest) {
   // ログ保存
   try {
     await supabaseAdmin.from("ocr_scan_logs").insert({
-      raw_text: rawText || null,
+      raw_text: rawText,
       candidates,
       error_msg: errorMsg,
     });
@@ -41,5 +46,5 @@ export async function POST(req: NextRequest) {
     console.warn("[label-scan] log save failed:", logErr);
   }
 
-  return NextResponse.json({ candidates, rawText: rawText || null });
+  return NextResponse.json({ candidates, rawText });
 }
