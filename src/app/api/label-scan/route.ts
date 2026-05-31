@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { identifyBottleFromImage } from "@/lib/bottleIdentifier";
+import { findCandidates } from "@/lib/productMatcher";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const runtime = "nodejs";
@@ -20,16 +21,11 @@ export async function POST(req: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    const { data: masterData } = await supabaseAdmin
-      .from("bottle_master")
-      .select("name");
+    // Step 1: Claude Sonnet が自由形式でラベルのテキストを抽出
+    rawText = await identifyBottleFromImage(buffer);
 
-    const knownBottles: string[] = (masterData ?? [])
-      .map((r) => r.name as string)
-      .filter(Boolean);
-
-    candidates = await identifyBottleFromImage(buffer, knownBottles);
-    rawText = candidates.join(", ") || null;
+    // Step 2: ファジーマッチで bottle_master から候補を絞り込む
+    candidates = rawText ? await findCandidates(rawText) : [];
   } catch (e: unknown) {
     errorMsg = e instanceof Error ? e.message : String(e);
     console.error("[label-scan] error:", errorMsg);
