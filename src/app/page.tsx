@@ -126,6 +126,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
 
   const [showAllRecent, setShowAllRecent] = useState(false);
+  const [showDetailFilter, setShowDetailFilter] = useState(false);
 
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [filterRating, setFilterRating] = useState<number | null>(null);
@@ -284,7 +285,7 @@ export default function HomePage() {
 
           <div className="space-y-3">
 
-            {/* カテゴリで探す */}
+            {/* カテゴリ（常時表示） */}
             <div className="space-y-2">
               <p className="text-xs text-white/50 tracking-wider">カテゴリで探す</p>
               <div className="flex flex-wrap gap-2">
@@ -304,65 +305,78 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* 評価から探す */}
-            <div className="space-y-2">
-              <p className="text-xs text-white/50 tracking-wider">評価から探す</p>
-              <div className="flex flex-wrap gap-2">
-                {[4.5, 4, 3.5, 3].map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => setFilterRating(filterRating === r ? null : r)}
-                    className={`px-3 py-1 rounded-full text-sm border transition ${
-                      filterRating === r
-                        ? "bg-yellow-400 text-black border-yellow-400"
-                        : "border-white/25 hover:bg-white/10"
-                    }`}
-                  >
-                    ★{r}以上
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* 詳細フィルター（折りたたみ） */}
+            <button
+              onClick={() => setShowDetailFilter((v) => !v)}
+              className="flex items-center gap-1 text-xs text-white/50 hover:text-white/80 transition"
+            >
+              <span>{showDetailFilter ? "▲" : "▼"}</span>
+              詳細フィルター{(filterRating !== null || filterTaste !== null || filterScene !== null) && " ●"}
+            </button>
 
-            {/* 味わいで探す */}
-            <div className="space-y-2">
-              <p className="text-xs text-white/50 tracking-wider">味わいで探す</p>
-              <div className="flex flex-wrap gap-2">
-                {TASTES.map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setFilterTaste(filterTaste === t ? null : t)}
-                    className={`px-3 py-1 rounded-full text-sm border transition ${
-                      filterTaste === t
-                        ? "bg-white text-black border-white"
-                        : "border-white/25 hover:bg-white/10"
-                    }`}
-                  >
-                    #{t}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {showDetailFilter && (
+              <div className="space-y-3 pt-1">
+                {/* 評価から探す */}
+                <div className="space-y-2">
+                  <p className="text-xs text-white/50 tracking-wider">評価から探す</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[4.5, 4, 3.5, 3].map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => setFilterRating(filterRating === r ? null : r)}
+                        className={`px-3 py-1 rounded-full text-sm border transition ${
+                          filterRating === r
+                            ? "bg-yellow-400 text-black border-yellow-400"
+                            : "border-white/25 hover:bg-white/10"
+                        }`}
+                      >
+                        ★{r}以上
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            {/* シーンで探す */}
-            <div className="space-y-2">
-              <p className="text-xs text-white/50 tracking-wider">シーンで探す</p>
-              <div className="flex flex-wrap gap-2">
-                {SCENES.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setFilterScene(filterScene === s ? null : s)}
-                    className={`px-3 py-1 rounded-full text-sm border transition ${
-                      filterScene === s
-                        ? "bg-white text-black border-white"
-                        : "border-white/25 hover:bg-white/10"
-                    }`}
-                  >
-                    #{s}
-                  </button>
-                ))}
+                {/* 味わいで探す */}
+                <div className="space-y-2">
+                  <p className="text-xs text-white/50 tracking-wider">味わいで探す</p>
+                  <div className="flex flex-wrap gap-2">
+                    {TASTES.map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setFilterTaste(filterTaste === t ? null : t)}
+                        className={`px-3 py-1 rounded-full text-sm border transition ${
+                          filterTaste === t
+                            ? "bg-white text-black border-white"
+                            : "border-white/25 hover:bg-white/10"
+                        }`}
+                      >
+                        #{t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* シーンで探す */}
+                <div className="space-y-2">
+                  <p className="text-xs text-white/50 tracking-wider">シーンで探す</p>
+                  <div className="flex flex-wrap gap-2">
+                    {SCENES.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setFilterScene(filterScene === s ? null : s)}
+                        className={`px-3 py-1 rounded-full text-sm border transition ${
+                          filterScene === s
+                            ? "bg-white text-black border-white"
+                            : "border-white/25 hover:bg-white/10"
+                        }`}
+                      >
+                        #{s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
 
             {hasFilter && (
               <button
@@ -517,10 +531,6 @@ export default function HomePage() {
                         </span>
                       ))}
                     </div>
-                  )}
-
-                  {!s.hasReviews && s.summary && (
-                    <p className="text-xs text-white/60 line-clamp-2">{s.summary}</p>
                   )}
 
                   {s.hasReviews && (

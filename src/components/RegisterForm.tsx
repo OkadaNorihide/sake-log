@@ -258,7 +258,7 @@ export default function RegisterForm({ defaultName = "" }: Props) {
 
       {/* 銘柄名 */}
       <div className="space-y-2">
-        <label className="text-sm font-medium">銘柄名</label>
+        <label className="text-sm font-medium">銘柄名 <span className="text-red-400 text-xs">必須</span></label>
         <input
           list="bottle-names-list"
           className="w-full bg-white/10 border border-white/20 text-white placeholder-white/40 p-3 rounded-lg outline-none focus:ring-2 focus:ring-white/30"
@@ -349,7 +349,7 @@ export default function RegisterForm({ defaultName = "" }: Props) {
 
       {/* 評価 */}
       <div className="space-y-2">
-        <label className="text-sm font-medium">評価</label>
+        <label className="text-sm font-medium">評価 <span className="text-red-400 text-xs">必須</span></label>
         <div className="flex gap-1 text-3xl">
           {[1, 2, 3, 4, 5].map((i) => (
             <button key={i} type="button" onClick={() => setRating(i)} className={i <= rating ? "text-yellow-400" : "text-white/20"}>
@@ -444,6 +444,17 @@ export default function RegisterForm({ defaultName = "" }: Props) {
         />
       </div>
 
+      {!canGoConfirm && (
+        <p className="text-xs text-white/50 text-center">
+          {!name.trim() && rating === 0
+            ? "銘柄名と評価を入力してください"
+            : !name.trim()
+            ? "銘柄名を入力してください"
+            : rating === 0
+            ? "評価（★）を選んでください"
+            : "アップロード中です..."}
+        </p>
+      )}
       <button
         type="button"
         disabled={!canGoConfirm}
