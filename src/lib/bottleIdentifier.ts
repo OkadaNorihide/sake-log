@@ -13,9 +13,7 @@ function detectMimeType(buffer: Buffer): ImageMediaType {
 }
 
 /**
- * Claude Sonnet でボトルラベルを識別し、銘柄特定に使えるテキストを返す。
- * リストへの直接マッチはせず、自由形式で識別させる。
- * 後段の findCandidates (ファジーマッチ) に渡して使う。
+ * Step 1: Claude Sonnet でボトルラベルを識別し、自由形式テキストを返す。
  */
 export async function identifyBottleFromImage(buffer: Buffer): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -58,4 +56,49 @@ export async function identifyBottleFromImage(buffer: Buffer): Promise<string> {
 
   const content = message.content[0];
   return content.type === "text" ? content.text.trim() : "";
+}
+
+/**
+ * Step 3: ラベルテキスト + Web検索結果を渡し、
+ * Claude に銘柄名を1つ確定させる。
+ * 検索結果がない場合はラベルテキストのみで判断。
+ */
+export async function confirmBottleFromWebSearch(
+  ocrText: string,
+  searchResults: string
+): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+
+  if (!apiKey) {
+    return ocrText;
+  }
+
+  const client = new Anthropic({ apiKey });
+
+  const prompt = searchResults
+    ? [
+        "以下のラベル情報とWeb検索結果をもとに、ボトルの正式な銘柄名を1つだけ答えてください。",
+        "日本語の正式名称で答えてください（例：山崎 12年、白州 ノンエイジ、響 17年）。",
+        "銘柄名だけを返してください。説明不要です。",
+        "",
+        `【ラベルから読み取った情報】\n${ocrText}`,
+        "",
+        `【Web検索結果】\n${searchResults}`,
+      ].join("\n")
+    : [
+        "以下のラベル情報をもとに、ボトルの正式な銘柄名を1つだけ答えてください。",
+        "日本語の正式名称で答えてください（例：山崎 12年、白州 ノンエイジ、響 17年）。",
+        "銘柄名だけを返してください。説明不要です。",
+        "",
+        `【ラベルから読み取った情報】\n${ocrText}`,
+      ].join("\n");
+
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 100,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const content = message.content[0];
+  return content.type === "text" ? content.text.trim() : ocrText;
 }

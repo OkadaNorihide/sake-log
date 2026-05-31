@@ -1,6 +1,6 @@
 /**
- * Tavily Search API でボトル名を検索し、商品ページのタイトル・スニペットを返す。
- * Claude が抽出したテキストと組み合わせて findCandidates に渡す。
+ * Tavily Search API でボトル名を検索し、
+ * Claude が読める構造化テキストとして検索結果を返す。
  */
 
 type TavilyResult = {
@@ -14,15 +14,14 @@ type TavilyResponse = {
 };
 
 /**
- * Claude の抽出テキストを使って Web 検索し、
- * 検索結果のタイトル＋スニペットを連結した補強テキストを返す。
- * API キーが未設定の場合は元テキストをそのまま返す。
+ * OCR テキストで Web 検索し、検索結果を Claude 向けの構造化文字列で返す。
+ * API キー未設定時は空文字を返す。
  */
-export async function enrichWithWebSearch(ocrText: string): Promise<string> {
+export async function searchBottleOnWeb(query: string): Promise<string> {
   const apiKey = process.env.TAVILY_API_KEY;
   if (!apiKey) {
     console.warn("[bottleWebSearch] TAVILY_API_KEY not set, skipping web search");
-    return ocrText;
+    return "";
   }
 
   try {
@@ -31,7 +30,7 @@ export async function enrichWithWebSearch(ocrText: string): Promise<string> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         api_key: apiKey,
-        query: `${ocrText} ウィスキー 銘柄`,
+        query: `${query} ウィスキー 日本酒 銘柄`,
         search_depth: "basic",
         max_results: 3,
         include_answer: false,
@@ -40,22 +39,22 @@ export async function enrichWithWebSearch(ocrText: string): Promise<string> {
 
     if (!res.ok) {
       console.warn("[bottleWebSearch] Tavily error:", res.status);
-      return ocrText;
+      return "";
     }
 
     const data: TavilyResponse = await res.json();
     const results = data.results ?? [];
 
-    // タイトルと本文冒頭を連結して findCandidates の入力を豊かにする
-    const snippets = results
-      .map((r) =>
-        [r.title, r.content?.slice(0, 300)].filter(Boolean).join(" ")
-      )
-      .join(" | ");
+    if (results.length === 0) return "";
 
-    return snippets ? `${ocrText} ${snippets}` : ocrText;
+    // Claude が読めるよう番号付きで整形
+    return results
+      .map((r, i) =>
+        `[${i + 1}] タイトル: ${r.title ?? "不明"}\n内容: ${r.content?.slice(0, 400) ?? ""}`
+      )
+      .join("\n\n");
   } catch (e) {
     console.warn("[bottleWebSearch] fetch error:", e);
-    return ocrText;
+    return "";
   }
 }
