@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { identifyBottleFromImage } from "@/lib/bottleIdentifier";
+import { enrichWithWebSearch } from "@/lib/bottleWebSearch";
 import { findCandidates } from "@/lib/productMatcher";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -24,8 +25,11 @@ export async function POST(req: NextRequest) {
     // Step 1: Claude Sonnet が自由形式でラベルのテキストを抽出
     rawText = await identifyBottleFromImage(buffer);
 
-    // Step 2: ファジーマッチで bottle_master から候補を絞り込む
-    candidates = rawText ? await findCandidates(rawText) : [];
+    // Step 2: Tavily で Web 検索してテキストを補強
+    const enrichedText = rawText ? await enrichWithWebSearch(rawText) : "";
+
+    // Step 3: ファジーマッチで bottle_master から候補を絞り込む
+    candidates = enrichedText ? await findCandidates(enrichedText) : [];
   } catch (e: unknown) {
     errorMsg = e instanceof Error ? e.message : String(e);
     console.error("[label-scan] error:", errorMsg);
