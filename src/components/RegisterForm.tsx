@@ -71,6 +71,7 @@ export default function RegisterForm({ defaultName = "" }: Props) {
   const [scanState, setScanState] = useState<"idle" | "scanning" | "done" | "error">("idle");
   const [scanCandidates, setScanCandidates] = useState<string[]>([]);
   const [scanError, setScanError] = useState("");
+  const [scanLogId, setScanLogId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/bottles", { cache: "no-store" })
@@ -96,17 +97,29 @@ export default function RegisterForm({ defaultName = "" }: Props) {
     setScanState("scanning");
     setScanCandidates([]);
     setScanError("");
+    setScanLogId(null);
     try {
       const formData = new FormData();
       formData.append("image", files[0]);
       const res = await fetch("/api/label-scan", { method: "POST", body: formData });
       const json = await res.json();
       setScanCandidates(Array.isArray(json.candidates) ? json.candidates : []);
+      setScanLogId(json.logId ?? null);
       setScanState("done");
     } catch {
       setScanError("スキャンに失敗しました。手入力してください。");
       setScanState("error");
     }
+  };
+
+  const recordScanFeedback = (selectedName: string) => {
+    if (!scanLogId || !selectedName.trim()) return;
+    fetch("/api/label-scan", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ logId: scanLogId, selectedName: selectedName.trim() }),
+    }).catch(() => {});
+    setScanLogId(null); // 二重送信防止
   };
 
   const toggle = (value: string, list: string[], setList: (v: string[]) => void) => {
@@ -147,6 +160,8 @@ export default function RegisterForm({ defaultName = "" }: Props) {
   };
 
   const onSubmit = async () => {
+    // スキャン後に手動で銘柄名を修正した場合もフィードバックとして記録
+    recordScanFeedback(name);
     try {
       const res = await fetch("/api/reviews", {
         method: "POST",
@@ -291,7 +306,12 @@ export default function RegisterForm({ defaultName = "" }: Props) {
                     <button
                       key={c}
                       type="button"
-                      onClick={() => { setName(c); setScanCandidates([]); setScanState("idle"); }}
+                      onClick={() => {
+                        setName(c);
+                        recordScanFeedback(c);
+                        setScanCandidates([]);
+                        setScanState("idle");
+                      }}
                       className="px-3 py-1 border border-white/30 rounded-full text-sm hover:bg-white/20 transition"
                     >
                       {c}
