@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-const TASTES = ["フルーティー", "甘い", "スモーキー", "軽い", "コク", "スパイシー"];
+const TASTES = ["ピート / スモーキー", "フルーティ", "シェリー", "バニラ", "スパイシー", "ライト", "甘い"];
 const SCENES = ["家飲み", "バー", "居酒屋", "贈答", "特別な日"];
-const WHISKY_CATEGORIES = ["ジャパニーズ", "スコッチ", "バーボン", "アイリッシュ", "ブレンデッド", "その他"];
+const WHISKY_CATEGORIES = ["スコッチ(シングルモルト)", "スコッチ(ブレンデッド)", "ジャパニーズ(定番)", "ジャパニーズ(クラフト)", "バーボン", "アイリッシュ", "カナディアン", "ワールド", "その他"];
 
 type Review = {
   id: string;

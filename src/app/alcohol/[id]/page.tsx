@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 
-const TASTES = ["フルーティー", "甘い", "スモーキー", "軽い", "コク", "スパイシー"];
+const TASTES = ["ピート / スモーキー", "フルーティ", "シェリー", "バニラ", "スパイシー", "ライト", "甘い"];
 const SCENES = ["家飲み", "バー", "居酒屋", "贈答", "特別な日"];
-const CATEGORIES = ["ジャパニーズ", "スコッチ", "バーボン", "アイリッシュ", "ブレンデッド", "その他", "不明"];
+const CATEGORIES = ["スコッチ(シングルモルト)", "スコッチ(ブレンデッド)", "ジャパニーズ(定番)", "ジャパニーズ(クラフト)", "バーボン", "アイリッシュ", "カナディアン", "ワールド", "その他", "不明"];
 
 type Review = {
   id: string;

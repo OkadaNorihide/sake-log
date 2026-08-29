@@ -3,11 +3,13 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 // bottle_master の英語カテゴリ → 日本語
 const CATEGORY_MAP: Record<string, string> = {
-  japanese: "ジャパニーズ",
-  scotch: "スコッチ",
+  japanese: "ジャパニーズ(定番)",
+  scotch: "スコッチ(シングルモルト)",
   bourbon: "バーボン",
   irish: "アイリッシュ",
-  blended: "ブレンデッド",
+  blended: "スコッチ(ブレンデッド)",
+  canadian: "カナディアン",
+  world: "ワールド",
 };
 
 export async function GET() {

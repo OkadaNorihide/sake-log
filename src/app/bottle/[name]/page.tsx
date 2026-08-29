@@ -75,7 +75,7 @@ async function uploadHeroImage(file: File): Promise<string> {
 
 const EMPTY_INFO: BottleInfo = { summary: "", official_url: "", amazon_url: "", rakuten_url: "", hero_image_url: "" };
 
-const CATEGORIES = ["ジャパニーズ", "スコッチ", "バーボン", "アイリッシュ", "ブレンデッド", "その他", "不明"];
+const CATEGORIES = ["スコッチ(シングルモルト)", "スコッチ(ブレンデッド)", "ジャパニーズ(定番)", "ジャパニーズ(クラフト)", "バーボン", "アイリッシュ", "カナディアン", "ワールド", "その他", "不明"];
 
 export default function BottleDetailPage() {
   const params = useParams<{ name: string }>();
