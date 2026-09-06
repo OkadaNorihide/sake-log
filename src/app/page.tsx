@@ -133,6 +133,17 @@ export default function HomePage() {
   const [filterTaste, setFilterTaste] = useState<string | null>(null);
   const [filterScene, setFilterScene] = useState<string | null>(null);
 
+  // マッピング表示
+  const [mapAttrs, setMapAttrs] = useState<string[]>([]);
+
+  function toggleMapAttr(attr: string) {
+    setMapAttrs((prev) => {
+      if (prev.includes(attr)) return prev.filter((a) => a !== attr);
+      if (prev.length >= 2) return [prev[1], attr];
+      return [...prev, attr];
+    });
+  }
+
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
@@ -226,6 +237,26 @@ export default function HomePage() {
 
   // 検索・フィルター変更時に表示数リセット
   useEffect(() => { setVisibleCount(25); }, [q, filterCategory, filterRating, filterTaste, filterScene]);
+
+  // マッピング用スコア計算（投稿数トップ25銘柄）
+  const mapPoints = useMemo(() => {
+    if (mapAttrs.length !== 2) return [];
+    const [a1, a2] = mapAttrs;
+    const byName = new Map<string, Review[]>();
+    for (const r of reviews) {
+      const name = (r.name ?? "").trim();
+      if (!name) continue;
+      if (!byName.has(name)) byName.set(name, []);
+      byName.get(name)!.push(r);
+    }
+    const points = [...byName.entries()].map(([name, rs]) => {
+      const total = rs.length;
+      const scoreX = rs.filter((r) => [...(r.tastes ?? []), ...(r.scenes ?? [])].includes(a1)).length / total;
+      const scoreY = rs.filter((r) => [...(r.tastes ?? []), ...(r.scenes ?? [])].includes(a2)).length / total;
+      return { name, scoreX, scoreY, reviewCount: total };
+    });
+    return points.sort((a, b) => b.reviewCount - a.reviewCount).slice(0, 25);
+  }, [mapAttrs, reviews]);
 
   const hasFilter = filterCategory !== null || filterRating !== null || filterTaste !== null || filterScene !== null;
 
@@ -374,6 +405,113 @@ export default function HomePage() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* マッピングで探す */}
+                <div className="space-y-2 pt-1 border-t border-white/10">
+                  <p className="text-xs text-white/50 tracking-wider">マッピングで探す</p>
+                  <p className="text-xs text-white/35">味わい・シーンから2つ選ぶと銘柄をマップ表示します</p>
+                  <div className="space-y-1">
+                    <p className="text-xs text-white/40">── 味わい</p>
+                    <div className="flex flex-wrap gap-2">
+                      {TASTES.map((t) => {
+                        const idx = mapAttrs.indexOf(t);
+                        return (
+                          <button
+                            key={t}
+                            onClick={() => toggleMapAttr(t)}
+                            className={`px-3 py-1 rounded-full text-sm border transition ${
+                              idx === 0 ? "bg-sky-400 text-black border-sky-400"
+                              : idx === 1 ? "bg-emerald-400 text-black border-emerald-400"
+                              : "border-white/25 hover:bg-white/10"
+                            }`}
+                          >
+                            {idx === 0 ? "X " : idx === 1 ? "Y " : ""}{t}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-white/40 pt-1">── シーン</p>
+                    <div className="flex flex-wrap gap-2">
+                      {SCENES.map((s) => {
+                        const idx = mapAttrs.indexOf(s);
+                        return (
+                          <button
+                            key={s}
+                            onClick={() => toggleMapAttr(s)}
+                            className={`px-3 py-1 rounded-full text-sm border transition ${
+                              idx === 0 ? "bg-sky-400 text-black border-sky-400"
+                              : idx === 1 ? "bg-emerald-400 text-black border-emerald-400"
+                              : "border-white/25 hover:bg-white/10"
+                            }`}
+                          >
+                            {idx === 0 ? "X " : idx === 1 ? "Y " : ""}{s}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {mapAttrs.length < 2 && mapAttrs.length > 0 && (
+                    <p className="text-xs text-white/40">あと {2 - mapAttrs.length} つ選んでください</p>
+                  )}
+
+                  {/* 散布図 */}
+                  {mapAttrs.length === 2 && (() => {
+                    const SVG_W = 500, SVG_H = 400;
+                    const PL = 70, PR = 20, PT = 20, PB = 52;
+                    const PW = SVG_W - PL - PR, PH = SVG_H - PT - PB;
+                    return (
+                      <div className="mt-2 bg-white/5 rounded-xl p-2">
+                        {mapPoints.length === 0 ? (
+                          <p className="text-xs text-white/40 text-center py-8">投稿データがありません</p>
+                        ) : (
+                          <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ maxHeight: 400 }}>
+                            {/* プロットエリア背景 */}
+                            <rect x={PL} y={PT} width={PW} height={PH} fill="rgba(255,255,255,0.03)" rx={4} />
+                            {/* グリッド */}
+                            {[0.25, 0.5, 0.75].map((v) => (
+                              <g key={v}>
+                                <line x1={PL + v * PW} y1={PT} x2={PL + v * PW} y2={PT + PH} stroke="rgba(255,255,255,0.08)" />
+                                <line x1={PL} y1={PT + (1 - v) * PH} x2={PL + PW} y2={PT + (1 - v) * PH} stroke="rgba(255,255,255,0.08)" />
+                                <text x={PL + v * PW} y={PT + PH + 14} textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize={9}>{Math.round(v * 100)}%</text>
+                                <text x={PL - 6} y={PT + (1 - v) * PH + 4} textAnchor="end" fill="rgba(255,255,255,0.3)" fontSize={9}>{Math.round(v * 100)}%</text>
+                              </g>
+                            ))}
+                            {/* 軸 */}
+                            <line x1={PL} y1={PT + PH} x2={PL + PW} y2={PT + PH} stroke="rgba(255,255,255,0.35)" />
+                            <line x1={PL} y1={PT} x2={PL} y2={PT + PH} stroke="rgba(255,255,255,0.35)" />
+                            {/* 軸ラベル */}
+                            <text x={PL + PW / 2} y={SVG_H - 6} textAnchor="middle" fill="rgba(135,206,250,0.9)" fontSize={12} fontWeight="600">→ {mapAttrs[0]}</text>
+                            <text x={14} y={PT + PH / 2} textAnchor="middle" fill="rgba(52,211,153,0.9)" fontSize={12} fontWeight="600" transform={`rotate(-90,14,${PT + PH / 2})`}>↑ {mapAttrs[1]}</text>
+                            {/* 点 */}
+                            {mapPoints.map((pt) => {
+                              const cx = PL + pt.scoreX * PW;
+                              const cy = PT + (1 - pt.scoreY) * PH;
+                              const r = Math.min(12, 5 + pt.reviewCount * 1.5);
+                              const label = pt.name.length > 9 ? pt.name.slice(0, 9) + "…" : pt.name;
+                              const lx = pt.scoreX > 0.72 ? cx - r - 3 : cx + r + 3;
+                              const anchor = pt.scoreX > 0.72 ? "end" : "start";
+                              const ly = pt.scoreY > 0.72 ? cy + r + 11 : cy - r - 3;
+                              return (
+                                <a key={pt.name} href={`/bottle/${encodeURIComponent(pt.name)}`}>
+                                  <circle cx={cx} cy={cy} r={r} fill="rgba(251,191,36,0.75)" stroke="rgba(255,255,255,0.25)" strokeWidth={1} style={{ cursor: "pointer" }} />
+                                  <text x={lx} y={ly} textAnchor={anchor} fill="rgba(255,255,255,0.88)" fontSize={10} style={{ pointerEvents: "none" }}>{label}</text>
+                                </a>
+                              );
+                            })}
+                          </svg>
+                        )}
+                        <p className="text-xs text-white/30 text-center mt-1">円の大きさ ＝ 投稿数　クリックで銘柄詳細へ</p>
+                      </div>
+                    );
+                  })()}
+
+                  {mapAttrs.length > 0 && (
+                    <button onClick={() => setMapAttrs([])} className="text-xs text-white/40 underline hover:text-white/70 transition">
+                      選択をリセット
+                    </button>
+                  )}
                 </div>
               </div>
             )}
