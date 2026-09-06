@@ -41,6 +41,16 @@ type BottleSummary = {
   hasReviews: boolean;
 };
 
+// 旧タスト名 → 新タスト名の正規化マップ
+const TASTE_NORMALIZE: Record<string, string> = {
+  "フルーティー": "フルーティ",
+  "スモーキー": "ピート / スモーキー",
+  "軽い": "ライト",
+};
+function normalizeTaste(t: string): string {
+  return TASTE_NORMALIZE[t] ?? t;
+}
+
 // 検索正規化：スペース除去・小文字化・カタカナ→ひらがな変換
 function normalizeSearch(s: string): string {
   return s
@@ -82,7 +92,7 @@ function buildSummariesFromReviews(reviews: Review[]): Map<string, BottleSummary
   for (const [name, rs] of byName.entries()) {
     const reviewCount = rs.length;
     const avgRating = rs.reduce((s, r) => s + (Number(r.rating) || 0), 0) / reviewCount;
-    const allTastesFlat = rs.flatMap((r) => (Array.isArray(r.tastes) ? r.tastes : []));
+    const allTastesFlat = rs.flatMap((r) => (Array.isArray(r.tastes) ? r.tastes : []).map(normalizeTaste));
     const allScenesFlat = rs.flatMap((r) => (Array.isArray(r.scenes) ? r.scenes : []));
     const latest = rs.map((r) => r.created_at || "").filter(Boolean).sort().at(-1) || "";
     const latestReview = rs.filter((r) => r.created_at).sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0] ?? rs[0];
@@ -251,8 +261,12 @@ export default function HomePage() {
     }
     const points = [...byName.entries()].map(([name, rs]) => {
       const total = rs.length;
-      const scoreX = rs.filter((r) => [...(r.tastes ?? []), ...(r.scenes ?? [])].includes(a1)).length / total;
-      const scoreY = rs.filter((r) => [...(r.tastes ?? []), ...(r.scenes ?? [])].includes(a2)).length / total;
+      const scoreX = rs.filter((r) => [
+        ...(r.tastes ?? []).map(normalizeTaste), ...(r.scenes ?? [])
+      ].includes(a1)).length / total;
+      const scoreY = rs.filter((r) => [
+        ...(r.tastes ?? []).map(normalizeTaste), ...(r.scenes ?? [])
+      ].includes(a2)).length / total;
       return { name, scoreX, scoreY, reviewCount: total };
     });
     return points.sort((a, b) => b.reviewCount - a.reviewCount).slice(0, 25);
