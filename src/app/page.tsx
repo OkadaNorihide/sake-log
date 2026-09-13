@@ -498,22 +498,39 @@ export default function HomePage() {
                             {/* 軸ラベル */}
                             <text x={PL + PW / 2} y={SVG_H - 6} textAnchor="middle" fill="rgba(135,206,250,0.9)" fontSize={12} fontWeight="600">→ {mapAttrs[0]}</text>
                             <text x={14} y={PT + PH / 2} textAnchor="middle" fill="rgba(52,211,153,0.9)" fontSize={12} fontWeight="600" transform={`rotate(-90,14,${PT + PH / 2})`}>↑ {mapAttrs[1]}</text>
-                            {/* 点 */}
-                            {mapPoints.map((pt) => {
-                              const cx = PL + pt.scoreX * PW;
-                              const cy = PT + (1 - pt.scoreY) * PH;
-                              const r = Math.min(12, 5 + pt.reviewCount * 1.5);
-                              const label = pt.name.length > 9 ? pt.name.slice(0, 9) + "…" : pt.name;
-                              const lx = pt.scoreX > 0.72 ? cx - r - 3 : cx + r + 3;
-                              const anchor = pt.scoreX > 0.72 ? "end" : "start";
-                              const ly = pt.scoreY > 0.72 ? cy + r + 11 : cy - r - 3;
-                              return (
-                                <a key={pt.name} href={`/bottle/${encodeURIComponent(pt.name)}`}>
-                                  <circle cx={cx} cy={cy} r={r} fill="rgba(251,191,36,0.75)" stroke="rgba(255,255,255,0.25)" strokeWidth={1} style={{ cursor: "pointer" }} />
-                                  <text x={lx} y={ly} textAnchor={anchor} fill="rgba(255,255,255,0.88)" fontSize={10} style={{ cursor: "pointer" }} textDecoration="underline">{label}</text>
-                                </a>
-                              );
-                            })}
+                            {/* 点（同スコアは縦にずらして重なりを防ぐ） */}
+                            {(() => {
+                              const STEP = 18; // 重なり時の縦ずらし量(px)
+                              // 同一位置をグループ化（5%刻みでスナップ）
+                              const posKey = (pt: typeof mapPoints[0]) =>
+                                `${Math.round(pt.scoreX * 20)}_${Math.round(pt.scoreY * 20)}`;
+                              const groups = new Map<string, typeof mapPoints>();
+                              for (const pt of mapPoints) {
+                                const k = posKey(pt);
+                                if (!groups.has(k)) groups.set(k, []);
+                                groups.get(k)!.push(pt);
+                              }
+                              return mapPoints.map((pt) => {
+                                const group = groups.get(posKey(pt))!;
+                                const idx = group.indexOf(pt);
+                                const offset = (idx - (group.length - 1) / 2) * STEP;
+                                const baseCx = PL + pt.scoreX * PW;
+                                const baseCy = PT + (1 - pt.scoreY) * PH;
+                                const cx = baseCx;
+                                const cy = baseCy + offset;
+                                const r = 5;
+                                const label = pt.name.length > 9 ? pt.name.slice(0, 9) + "…" : pt.name;
+                                const lx = pt.scoreX > 0.72 ? cx - r - 3 : cx + r + 3;
+                                const anchor = pt.scoreX > 0.72 ? "end" : "start";
+                                const ly = cy + 4;
+                                return (
+                                  <a key={pt.name} href={`/bottle/${encodeURIComponent(pt.name)}`}>
+                                    <circle cx={cx} cy={cy} r={r} fill="rgba(251,191,36,0.8)" stroke="rgba(255,255,255,0.3)" strokeWidth={1} style={{ cursor: "pointer" }} />
+                                    <text x={lx} y={ly} textAnchor={anchor} fill="rgba(255,255,255,0.88)" fontSize={10} style={{ cursor: "pointer" }} textDecoration="underline">{label}</text>
+                                  </a>
+                                );
+                              });
+                            })()}
                           </svg>
                         )}
                         <p className="text-xs text-white/30 text-center mt-1">円の大きさ ＝ 投稿数　クリックで銘柄詳細へ</p>
