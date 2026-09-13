@@ -114,7 +114,7 @@ export default function SakeRegisterPage() {
 
   return (
     <div className="relative min-h-screen text-white">
-      <div className="absolute inset-0 bg-repeat-y opacity-45" style={{ backgroundImage: "url('/bar-bg.jpg')", backgroundSize: "100% auto" }} />
+      <div className="absolute inset-0 bg-repeat-y opacity-45" style={{ backgroundImage: "url('/sake-bg.jpg')", backgroundSize: "100% auto" }} />
       <div className="absolute inset-0 bg-black/60" />
       <div className="relative z-10 p-6 max-w-2xl mx-auto space-y-6">
         <header className="flex items-center justify-between">

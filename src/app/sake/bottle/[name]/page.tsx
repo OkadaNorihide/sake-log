@@ -153,7 +153,7 @@ export default function SakeBottleDetailPage() {
 
   return (
     <div className="relative min-h-screen text-white">
-      <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/bottle-bg.jpg')" }} />
+      <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/sake-bottle-bg.jpg')" }} />
       <div className="absolute inset-0 bg-black/75" />
       <div className="relative z-10 p-6 max-w-5xl mx-auto space-y-6">
         <header className="flex items-start justify-between gap-4">

@@ -124,7 +124,7 @@ export default function SakeReviewDetailPage() {
 
   return (
     <div className="relative min-h-screen text-white">
-      <div className="absolute inset-0 bg-cover" style={{ backgroundImage: "url('/review-bg.jpg')", backgroundPosition: "center 75%" }} />
+      <div className="absolute inset-0 bg-cover" style={{ backgroundImage: "url('/sake-review-bg.jpg')", backgroundPosition: "center 75%" }} />
       <div className="absolute inset-0 bg-black/70" />
       <div className="relative z-10 p-6 max-w-2xl mx-auto space-y-6">
         <header className="flex items-center justify-between">
