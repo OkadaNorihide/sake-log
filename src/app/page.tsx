@@ -510,7 +510,7 @@ export default function HomePage() {
                               return (
                                 <a key={pt.name} href={`/bottle/${encodeURIComponent(pt.name)}`}>
                                   <circle cx={cx} cy={cy} r={r} fill="rgba(251,191,36,0.75)" stroke="rgba(255,255,255,0.25)" strokeWidth={1} style={{ cursor: "pointer" }} />
-                                  <text x={lx} y={ly} textAnchor={anchor} fill="rgba(255,255,255,0.88)" fontSize={10} style={{ pointerEvents: "none" }}>{label}</text>
+                                  <text x={lx} y={ly} textAnchor={anchor} fill="rgba(255,255,255,0.88)" fontSize={10} style={{ cursor: "pointer" }} textDecoration="underline">{label}</text>
                                 </a>
                               );
                             })}
