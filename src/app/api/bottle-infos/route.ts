@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-// bottle_master の英語カテゴリ → 日本語
+// bottle_master の英語カテゴリ → 日本語（ウィスキー用レガシーマップ）
 const CATEGORY_MAP: Record<string, string> = {
   japanese: "ジャパニーズ(定番)",
   scotch: "スコッチ(シングルモルト)",
@@ -12,9 +12,11 @@ const CATEGORY_MAP: Record<string, string> = {
   world: "ワールド",
 };
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const drinkType = req.nextUrl.searchParams.get("drink_type") ?? "whisky";
+
   const [infosRes, mastersRes] = await Promise.all([
-    supabaseAdmin.from("bottle_info").select("name, summary, hero_image_url"),
+    supabaseAdmin.from("bottle_info").select("name, summary, hero_image_url, drink_type"),
     supabaseAdmin.from("bottle_master").select("name, category, drink_type"),
   ]);
 
@@ -22,16 +24,20 @@ export async function GET() {
     (mastersRes.data ?? []).map((m) => [m.name as string, m])
   );
 
-  const items = (infosRes.data ?? []).map((info) => {
+  const allItems = (infosRes.data ?? []).map((info) => {
     const master = masterMap.get(info.name as string);
+    const rawCat = master?.category as string | null;
+    const category = rawCat ? (CATEGORY_MAP[rawCat] ?? rawCat) : null;
     return {
       name: info.name as string,
       summary: (info.summary as string) || "",
       hero_image_url: (info.hero_image_url as string) || "",
-      category: master?.category ? (CATEGORY_MAP[master.category as string] ?? null) : null,
-      drink_type: (master?.drink_type as string) || "ウィスキー",
+      category,
+      drink_type: (info.drink_type as string) || (master?.drink_type as string) || "whisky",
     };
   });
+
+  const items = allItems.filter((i) => i.drink_type === drinkType);
 
   return NextResponse.json({ items });
 }
