@@ -22,7 +22,8 @@ export async function GET(req: NextRequest) {
   for (const r of masterRes.data ?? []) {
     const name = r.name as string;
     if (!name) continue;
-    const dt = (r.drink_type as string) || "whisky";
+    const rawDt = (r.drink_type as string) || "whisky";
+    const dt = rawDt === "ウィスキー" || rawDt === "whiskey" ? "whisky" : rawDt === "日本酒" ? "sake" : rawDt;
     if (dt !== drinkType) continue;
     canonicalNames.add(name);
     if (r.name_en) aliasToCanonical.set(r.name_en as string, name);

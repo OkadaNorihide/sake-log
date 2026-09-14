@@ -33,7 +33,12 @@ export async function GET(req: NextRequest) {
       summary: (info.summary as string) || "",
       hero_image_url: (info.hero_image_url as string) || "",
       category,
-      drink_type: (info.drink_type as string) || (master?.drink_type as string) || "whisky",
+      drink_type: (() => {
+        const raw = (info.drink_type as string) || (master?.drink_type as string) || "whisky";
+        if (raw === "ウィスキー" || raw === "whiskey") return "whisky";
+        if (raw === "日本酒") return "sake";
+        return raw;
+      })(),
     };
   });
 

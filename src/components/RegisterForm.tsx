@@ -46,9 +46,10 @@ async function uploadToCloudinary(file: File): Promise<string> {
 
 type Props = {
   defaultName?: string;
+  basePath?: string;
 };
 
-export default function RegisterForm({ defaultName = "" }: Props) {
+export default function RegisterForm({ defaultName = "", basePath = "" }: Props) {
   const [step, setStep] = useState<Step>("form");
 
   const [name, setName] = useState(defaultName);
@@ -199,10 +200,10 @@ export default function RegisterForm({ defaultName = "" }: Props) {
           <p className="text-sm text-white/70">レビューが保存されました。</p>
         </div>
         <div className="flex gap-3">
-          <Link href={`/alcohol/${createdId}`} className="w-1/2 bg-white text-black rounded-lg px-4 py-2 text-center font-medium">
+          <Link href={`${basePath}/alcohol/${createdId}`} className="w-1/2 bg-white text-black rounded-lg px-4 py-2 text-center font-medium">
             レビュー詳細を見る
           </Link>
-          <Link href="/" className="w-1/2 border border-white/20 rounded-lg px-4 py-2 text-center">
+          <Link href={basePath || "/"} className="w-1/2 border border-white/20 rounded-lg px-4 py-2 text-center">
             一覧へ
           </Link>
         </div>
