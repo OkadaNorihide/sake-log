@@ -488,6 +488,67 @@ export default function HubPage() {
           );
         })()}
 
+        {/* フィルター結果（直近投稿の上） */}
+        {hasFilter && !loading && (
+          <section className="space-y-5">
+            <div className="flex items-center gap-3">
+              <h2 className="text-base font-semibold">
+                {drawerDrinkType === "whisky" ? "🥃" : "🍶"} 検索結果
+              </h2>
+              <div className="flex-1 h-px bg-white/20" />
+              <span className="text-xs text-white/40">{filteredReviews.length}件のレビュー</span>
+            </div>
+
+            {filteredReviews.length === 0 ? (
+              <p className="text-sm text-white/50 text-center py-6">条件に合うレビューが見つかりませんでした。</p>
+            ) : (
+              <>
+                {/* 関連レビュー */}
+                <div>
+                  <p className="text-xs text-white/40 mb-2 tracking-wider">関連レビュー</p>
+                  <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+                    {filteredReviews.slice(0, 20).map((r) => (
+                      <RecentCard key={r.id} r={r} basePath={reviewBasePath} />
+                    ))}
+                  </div>
+                </div>
+
+                {/* 銘柄一覧（横スクロール、初期5件分表示） */}
+                {filteredBottles.length > 0 && (
+                  <div>
+                    <p className="text-xs text-white/40 mb-2 tracking-wider">銘柄一覧（{filteredBottles.length}件）</p>
+                    <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+                      {filteredBottles.map((b) => (
+                        <Link
+                          key={b.name}
+                          href={`${bottleBasePath}/${encodeURIComponent(b.name)}`}
+                          className="shrink-0 w-48 flex flex-col gap-2 bg-white/10 backdrop-blur-md border border-white/15 rounded-xl p-3 hover:bg-white/20 transition"
+                        >
+                          {b.thumb ? (
+                            <img src={toThumbUrl(b.thumb)} alt={b.name} className="h-24 w-full object-cover rounded-lg border border-white/20" />
+                          ) : (
+                            <div className="h-24 w-full rounded-lg bg-white/10 flex items-center justify-center text-xs text-white/30">no photo</div>
+                          )}
+                          <div className="text-sm font-semibold line-clamp-1">{b.name}</div>
+                          <div className="flex flex-wrap gap-1">
+                            {b.topTastes.map((t) => (
+                              <span key={t} className="text-xs bg-white/15 px-1.5 py-0.5 rounded-full">#{t}</span>
+                            ))}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-amber-300">★ {b.avgRating.toFixed(1)}</span>
+                            <span className="text-xs text-white/40">{b.reviewCount}件</span>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+        )}
+
         {/* Recent posts - Whisky */}
         {!loading && recentWhisky.length > 0 && (
           <section className="space-y-3">
@@ -524,69 +585,6 @@ export default function HubPage() {
           <div className="text-center text-white/50 text-sm py-12">
             まだ投稿がありません。お酒を登録してみましょう。
           </div>
-        )}
-
-        {/* フィルター結果（直近投稿の下） */}
-        {hasFilter && !loading && (
-          <section className="space-y-6" id="filter-results">
-            <div className="flex items-center gap-3">
-              <h2 className="text-base font-semibold">
-                {drawerDrinkType === "whisky" ? "🥃" : "🍶"} 検索結果
-              </h2>
-              <div className="flex-1 h-px bg-white/20" />
-              <span className="text-xs text-white/40">{filteredReviews.length}件のレビュー</span>
-            </div>
-
-            {filteredReviews.length === 0 ? (
-              <p className="text-sm text-white/50 text-center py-6">条件に合うレビューが見つかりませんでした。</p>
-            ) : (
-              <>
-                {/* 関連レビュー */}
-                <div>
-                  <p className="text-xs text-white/40 mb-2 tracking-wider">関連レビュー</p>
-                  <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
-                    {filteredReviews.slice(0, 20).map((r) => (
-                      <RecentCard key={r.id} r={r} basePath={reviewBasePath} />
-                    ))}
-                  </div>
-                </div>
-
-                {/* 銘柄一覧 */}
-                {filteredBottles.length > 0 && (
-                  <div>
-                    <p className="text-xs text-white/40 mb-3 tracking-wider">銘柄一覧（{filteredBottles.length}件）</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {filteredBottles.map((b) => (
-                        <Link
-                          key={b.name}
-                          href={`${bottleBasePath}/${encodeURIComponent(b.name)}`}
-                          className="flex items-center gap-3 bg-white/10 backdrop-blur-md border border-white/15 rounded-xl p-3 hover:bg-white/20 transition"
-                        >
-                          {b.thumb ? (
-                            <img src={toThumbUrl(b.thumb)} alt={b.name} className="h-12 w-12 object-cover rounded-lg border border-white/20 shrink-0" />
-                          ) : (
-                            <div className="h-12 w-12 rounded-lg bg-white/10 flex items-center justify-center text-xs text-white/30 shrink-0">—</div>
-                          )}
-                          <div className="flex-1 min-w-0 space-y-1">
-                            <div className="text-sm font-semibold truncate">{b.name}</div>
-                            <div className="flex flex-wrap gap-1">
-                              {b.topTastes.map((t) => (
-                                <span key={t} className="text-xs bg-white/15 px-1.5 py-0.5 rounded-full">#{t}</span>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className="text-sm text-amber-300">★ {b.avgRating.toFixed(1)}</div>
-                            <div className="text-xs text-white/40">{b.reviewCount}件</div>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </section>
         )}
       </div>
     </div>
