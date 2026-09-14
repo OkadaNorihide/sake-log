@@ -47,6 +47,7 @@ export default function HubPage() {
   // Drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerDrinkType, setDrawerDrinkType] = useState<DrinkType>("whisky");
+  const [drawerQ, setDrawerQ] = useState("");
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [filterRating, setFilterRating] = useState<number | null>(null);
   const [filterTaste, setFilterTaste] = useState<string | null>(null);
@@ -138,14 +139,18 @@ export default function HubPage() {
   // Apply filters to current reviews for showing filtered recent posts
   const filteredReviews = useMemo(() => {
     let result = currentReviews;
+    if (drawerQ.trim()) {
+      const q = drawerQ.trim().toLowerCase().replace(/\s+/g, "");
+      result = result.filter((r) => (r.name ?? "").toLowerCase().replace(/\s+/g, "").includes(q));
+    }
     if (filterCategory) result = result.filter((r) => r.category === filterCategory);
     if (filterRating) result = result.filter((r) => r.rating >= filterRating);
     if (filterTaste) result = result.filter((r) => (r.tastes ?? []).map(normalizeTaste).includes(filterTaste));
     if (filterScene) result = result.filter((r) => (r.scenes ?? []).includes(filterScene));
     return result;
-  }, [currentReviews, filterCategory, filterRating, filterTaste, filterScene]);
+  }, [currentReviews, drawerQ, filterCategory, filterRating, filterTaste, filterScene]);
 
-  const hasFilter = filterCategory !== null || filterRating !== null || filterTaste !== null || filterScene !== null;
+  const hasFilter = drawerQ.trim().length > 0 || filterCategory !== null || filterRating !== null || filterTaste !== null || filterScene !== null;
 
   // フィルター結果から銘柄サマリを生成
   const filteredBottles = useMemo(() => {
@@ -218,6 +223,18 @@ export default function HubPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold tracking-wide">詳細検索</h2>
             <button onClick={() => setDrawerOpen(false)} className="text-white/50 hover:text-white text-lg leading-none">✕</button>
+          </div>
+
+          {/* 銘柄名検索 */}
+          <div className="space-y-2">
+            <p className="text-xs text-white/40 tracking-wider">銘柄名</p>
+            <input
+              type="text"
+              value={drawerQ}
+              onChange={(e) => setDrawerQ(e.target.value)}
+              placeholder="例：獺祭、山崎..."
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white placeholder-white/40 outline-none focus:ring-2 focus:ring-white/30"
+            />
           </div>
 
           {/* Drink type */}
