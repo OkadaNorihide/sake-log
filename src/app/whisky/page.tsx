@@ -266,8 +266,6 @@ export default function WhiskyPage() {
       <div className="absolute inset-0 bg-repeat-y opacity-45" style={{ backgroundImage: "url('/bar-bg.jpg')", backgroundSize: "100% auto" }} />
       <div className="absolute inset-0 bg-black/40" />
 
-      <Link href="/" className="fixed top-4 right-4 z-50 bg-white/20 backdrop-blur-md border border-white/30 text-white text-xs px-3 py-1.5 rounded-full hover:bg-white/30 transition">← Top</Link>
-
       <div className="relative z-10 p-6 max-w-5xl mx-auto space-y-8">
 
         <section className="text-center pt-10 pb-4 space-y-5">
